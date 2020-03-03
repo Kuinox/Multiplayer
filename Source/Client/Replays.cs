@@ -1,15 +1,13 @@
-﻿extern alias zip;
-
 using Multiplayer.Common;
 using RimWorld;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using UnityEngine;
 using Verse;
-using zip::Ionic.Zip;
 
 namespace Multiplayer.Client
 {
@@ -24,7 +22,7 @@ namespace Multiplayer.Client
         }
 
         public FileInfo File => file;
-        public ZipFile ZipFile => new ZipFile(file.FullName);
+        public ZipArchive ZipFile => new ZipArchive(file.Open(FileMode.OpenOrCreate, FileAccess.ReadWrite), ZipArchiveMode.Update, false);
 
         public void WriteCurrentData()
         {
@@ -32,18 +30,32 @@ namespace Multiplayer.Client
 
             using (var zip = ZipFile)
             {
+                void AddEntry(string entryName, byte[] value)
+                {
+                    using (var zipEntry = zip.CreateEntry(entryName).Open())
+                    {
+                        zipEntry.Write(value, 0, value.Length);
+                    }
+                }
+
                 foreach (var kv in OnMainThread.cachedMapData)
-                    zip.AddEntry($"maps/{sectionId}_{kv.Key}_save", kv.Value);
+                {
+                    AddEntry($"maps/{sectionId}_{kv.Key}_save", kv.Value);
+                }
 
                 foreach (var kv in OnMainThread.cachedMapCmds)
+                {
                     if (kv.Key >= 0)
-                        zip.AddEntry($"maps/{sectionId}_{kv.Key}_cmds", SerializeCmds(kv.Value));
+                    {
+                        AddEntry($"maps/{sectionId}_{kv.Key}_cmds", SerializeCmds(kv.Value));
+                    }
+                }
+
 
                 if (OnMainThread.cachedMapCmds.TryGetValue(ScheduledCommand.Global, out var worldCmds))
-                    zip.AddEntry($"world/{sectionId}_cmds", SerializeCmds(worldCmds));
+                    AddEntry($"world/{sectionId}_cmds", SerializeCmds(worldCmds));
 
-                zip.AddEntry($"world/{sectionId}_save", OnMainThread.cachedGameData);
-                zip.Save();
+                AddEntry($"world/{sectionId}_save", OnMainThread.cachedGameData);
             }
 
             info.sections.Add(new ReplaySection(OnMainThread.cachedAtTime, TickPatch.Timer));
@@ -77,8 +89,17 @@ namespace Multiplayer.Client
         {
             using (var zip = ZipFile)
             {
-                zip.UpdateEntry("info", DirectXmlSaver.XElementFromObject(info, typeof(ReplayInfo)).ToString());
-                zip.Save();
+                void AddEntry(string entryName, string data)
+                {
+                    var value = Encoding.UTF8.GetBytes(data);
+                    using (var zipEntry = zip.CreateEntry(entryName).Open())
+                    {
+                        zipEntry.Write(value, 0, value.Length);
+                    }
+                }
+
+                zip.Entries.FirstOrDefault(s => s.Name == "info")?.Delete();
+                AddEntry("info", DirectXmlSaver.XElementFromObject(info, typeof(ReplayInfo)).ToString());
             }
         }
 
@@ -86,11 +107,16 @@ namespace Multiplayer.Client
         {
             using (var zip = ZipFile)
             {
-                var infoFile = zip["info"];
+                var infoFile = zip.Entries.FirstOrDefault(s => s.Name == "info");
                 if (infoFile == null) return false;
 
-                var doc = ScribeUtil.LoadDocument(infoFile.GetBytes());
-                info = DirectXmlToObject.ObjectFromXml<ReplayInfo>(doc.DocumentElement, true);
+                using (Stream sourceStream = infoFile.Open())
+                using (var memoryStream = new MemoryStream())
+                {
+                    sourceStream.CopyTo(memoryStream);
+                    var doc = ScribeUtil.LoadDocument(memoryStream.ToArray());
+                    info = DirectXmlToObject.ObjectFromXml<ReplayInfo>(doc.DocumentElement, true);
+                }
             }
 
             return true;
@@ -102,7 +128,7 @@ namespace Multiplayer.Client
 
             using (var zip = ZipFile)
             {
-                foreach (var mapCmds in zip.SelectEntries($"name = maps/{sectionIdStr}_*_cmds"))
+                foreach (var mapCmds in zip.Entries.SelectEntries($"name = maps/{sectionIdStr}_*_cmds"))
                 {
                     int mapId = int.Parse(mapCmds.FileName.Split('_')[1]);
                     OnMainThread.cachedMapCmds[mapId] = DeserializeCmds(mapCmds.GetBytes());

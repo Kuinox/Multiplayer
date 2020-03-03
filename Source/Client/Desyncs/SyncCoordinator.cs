@@ -1,4 +1,3 @@
-﻿extern alias zip;
 using HarmonyLib;
 using Multiplayer.Common;
 using System;
@@ -12,7 +11,7 @@ using System.Text;
 using RimWorld;
 using UnityEngine;
 using Verse;
-using zip::Ionic.Zip;
+using System.IO.Compression;
 
 namespace Multiplayer.Client
 {
@@ -135,19 +134,25 @@ namespace Multiplayer.Client
 
                 //Dump our current game object.
                 var savedGame = ScribeUtil.WriteExposable(Current.Game, "game", true, ScribeMetaHeaderUtility.WriteMetaHeader);
-
                 using (var zip = replay.ZipFile)
                 {
+                    void AddEntry(string entryName, byte[] value)
+                    {
+                        using (var zipEntry = zip.CreateEntry(entryName).Open())
+                        {
+                            zipEntry.Write(value, 0, value.Length);
+                        }
+                    }
                     //Write the local sync data
                     var syncLocal = local.Serialize();
-                    zip.AddEntry("sync_local", syncLocal);
+                    AddEntry("sync_local", syncLocal);
 
                     //Write the remote sync data
                     var syncRemote = remote.Serialize();
-                    zip.AddEntry("sync_remote", syncRemote);
+                    AddEntry("sync_remote", syncRemote);
 
                     //Dump the entire save file to the zip.
-                    zip.AddEntry("game_snapshot", savedGame);
+                    AddEntry("game_snapshot", savedGame);
 
                     //Prepare the desync info
                     var desyncInfo = new StringBuilder();
@@ -181,9 +186,7 @@ namespace Multiplayer.Client
                         .AppendLine($"OS Name and Version|||{SystemInfo.operatingSystem}");
 
                     //Save debug info to the zip
-                    zip.AddEntry("desync_info", desyncInfo.ToString());
-
-                    zip.Save();
+                    AddEntry("desync_info", Encoding.UTF8.GetBytes(desyncInfo.ToString()));
                 }
             }
             catch (Exception e)
@@ -255,7 +258,7 @@ namespace Multiplayer.Client
         {
             if (!ShouldCollect) return;
             CurrentOpinion.TryMarkSimulating();
-            CurrentOpinion.commandRandomStates.Add((uint) (state >> 32));
+            CurrentOpinion.commandRandomStates.Add((uint)(state >> 32));
         }
 
         /// <summary>
@@ -266,7 +269,7 @@ namespace Multiplayer.Client
         {
             if (!ShouldCollect) return;
             CurrentOpinion.TryMarkSimulating();
-            CurrentOpinion.worldRandomStates.Add((uint) (state >> 32));
+            CurrentOpinion.worldRandomStates.Add((uint)(state >> 32));
         }
 
         /// <summary>
@@ -278,7 +281,7 @@ namespace Multiplayer.Client
         {
             if (!ShouldCollect) return;
             CurrentOpinion.TryMarkSimulating();
-            CurrentOpinion.GetRandomStatesForMap(map).Add((uint) (state >> 32));
+            CurrentOpinion.GetRandomStatesForMap(map).Add((uint)(state >> 32));
         }
 
         /// <summary>
@@ -296,7 +299,7 @@ namespace Multiplayer.Client
             var trace = doTrace ? MpUtil.FastStackTrace(4) : new MethodBase[0];
 
             //Add it to the list
-            CurrentOpinion.desyncStackTraces.Add(new StackTraceLogItem {stackTrace = trace, additionalInfo = info});
+            CurrentOpinion.desyncStackTraces.Add(new StackTraceLogItem { stackTrace = trace, additionalInfo = info });
 
             //Calculate its hash and add it, for comparison with other opinions.
             currentOpinion.desyncStackTraceHashes.Add(trace.Hash() ^ (info?.GetHashCode() ?? 0));

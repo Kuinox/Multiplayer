@@ -12,7 +12,7 @@
   <ItemGroup>
     <PackageReference Include="RimWorld.MultiplayerAPI" Version="0.2.0" />
     <PackageReference Include="LiteNetLib" Version="0.8.3.1" />
-    <PackageReference Include="DotNetZip.Reduced" Version="1.9.1.8" />
+    <PackageReference Include="System.IO.Compression" Version="4.3.0" />
     <Reference Include="Assembly-CSharp-firstpass">
       <HintPath>..\..\..\RimWorldWin64_Data\Managed\Assembly-CSharp-firstpass.dll</HintPath>
       <Private>False</Private>
