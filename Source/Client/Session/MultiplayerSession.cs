@@ -4,6 +4,7 @@ using LudeonTK;
 using Multiplayer.Client.Networking;
 using Multiplayer.Client.Util;
 using Multiplayer.Common;
+using Multiplayer.Common.Networking.Packet;
 using RimWorld;
 using Steamworks;
 using UnityEngine;
@@ -51,6 +52,10 @@ namespace Multiplayer.Client
         public bool ArbiterPlaying => players.Any(p => p.type == PlayerType.Arbiter && p.status == PlayerStatus.Playing);
 
         public IConnector connector;
+        public bool isStandaloneServer;
+        public float autosaveInterval;
+        public AutosaveUnit autosaveUnit;
+        public bool ConnectedToStandaloneServer => client != null && isStandaloneServer;
 
         public void Stop()
         {

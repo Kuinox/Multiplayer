@@ -71,6 +71,7 @@ public partial class BootstrapConfiguratorWindow : Window, IConnectionStatusList
 
         settings.steam = false;
         settings.arbiter = false;
+            settings.EnforceStandaloneRequirements();
 
         settingsUiBuffers.MaxPlayersBuffer = settings.maxPlayers.ToString();
         settingsUiBuffers.AutosaveBuffer = settings.autosaveInterval.ToString();
@@ -217,10 +218,7 @@ public partial class BootstrapConfiguratorWindow : Window, IConnectionStatusList
         if (tab == Tab.Connecting)
             return 5 * 30f;
 
-        if (tab == Tab.Gameplay)
-            return (MpVersion.IsDebug ? 9 : 8) * 30f;
-
-        return 260f;
+        return (MpVersion.IsDebug ? 9 : 8) * 30f;
     }
 
     private sealed class PendingUploadState
