@@ -857,6 +857,32 @@ static class QuestPart_LendColonistsToFaction_Enable_Patch
     }
 }
 
+[HarmonyPatch(typeof(Map), nameof(Map.IsPlayerHome), MethodType.Getter)]
+static class Map_IsPlayerHome_Spectator_Patch
+{
+    static bool Prefix(Map __instance, bool __result)
+    {
+        if (Multiplayer.Client == null || !Multiplayer.GameComp.multifaction ||
+            Faction.OfPlayer != Multiplayer.WorldComp.spectatorFaction)
+            return true;
+
+        {
+            // Is repeat through all player faction a better idea?
+            if (!__instance.wasSpawnedViaGravShipLanding)
+            {
+                MapInfo mapInfo = __instance.info;
+                if (((mapInfo != null) ? mapInfo.parent : null) == null || __instance.info.parent.Faction.IsPlayer == false || !__instance.info.parent.def.canBePlayerHome)
+                {
+                    __result = GravshipUtility.PlayerHasGravEngine(__instance);
+                    return false;
+                }
+            }
+            __result = true;
+            return false;
+        }
+    }
+}
+
 [HarmonyPatch]
 static class Pawn_TraderTracker_ColonyThingsWillingToBuy_Patch
 {
@@ -902,6 +928,7 @@ static class Pawn_TraderTracker_ColonyThingsWillingToBuy_Patch
         }
     }
 }
+
 [HarmonyPatch]
 static class TradeUtility_AllLaunchableThingsForTrade_Patch
 {
@@ -928,6 +955,5 @@ static class TradeUtility_AllLaunchableThingsForTrade_Patch
 
             yield return ci;
         }
-
     }
 }
