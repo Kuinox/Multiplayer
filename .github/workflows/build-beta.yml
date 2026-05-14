@@ -34,8 +34,22 @@ jobs:
     - name: Build Mod
       run: dotnet build ${{ env.SLN_PATH }} --configuration Release --no-restore
 
-    - name: Publish Server
-      run: dotnet publish ${{ env.SLN_PATH }}Server/Server.csproj --configuration Release --no-restore --no-build -o output/Server
+    - name: Publish Server (Windows)
+      run: dotnet publish ${{ env.SLN_PATH }}Server/Server.csproj --configuration Release --runtime win-x64 --self-contained false -p:UseAppHost=true -o output/Server/Windows
+
+    - name: Publish Server (Linux)
+      run: dotnet publish ${{ env.SLN_PATH }}Server/Server.csproj --configuration Release --runtime linux-x64 --self-contained false -p:UseAppHost=true -o output/Server/Linux
+
+    - name: Add Server Launchers
+      run: |
+        cat > output/Server/Linux/Server.sh <<'EOF'
+        #!/usr/bin/env bash
+        set -euo pipefail
+        SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+        exec dotnet "$SCRIPT_DIR/Server.dll" "$@"
+        EOF
+
+        chmod +x output/Server/Linux/Server.sh
 
     - name: Package files
       run: |
