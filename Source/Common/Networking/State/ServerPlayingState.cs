@@ -66,8 +66,10 @@ namespace Multiplayer.Common
             string msg = packet.msg;
             msg = msg.Trim();
 
-            // todo handle max length
             if (msg.Length == 0) return;
+
+            if (msg.Length > MaxChatMsgLength)
+                msg = msg[..MaxChatMsgLength];
 
             if (msg[0] == '/')
             {
@@ -230,7 +232,8 @@ namespace Multiplayer.Common
         [TypedPacketHandler]
         public void HandleDebug(ClientDebugPacket _)
         {
-            // todo restrict handling
+            if (!Server.commands.CanUseDevMode(Player))
+                return;
 
             Server.worldData.mapCmds.Clear();
             Server.gameTimer = Server.startingTimer;

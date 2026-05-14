@@ -94,7 +94,8 @@ namespace Multiplayer.Client
                     session.autosaveCounter = 0;
                     Autosaving.DoAutosave();
                 }
-            } else if (server.settings.autosaveUnit == AutosaveUnit.Days && server.settings.autosaveInterval > 0)
+            }
+            else if (server.settings.autosaveUnit == AutosaveUnit.Days && server.settings.autosaveInterval > 0)
             {
                 var anyMapCounterUp =
                     Multiplayer.game.mapComps

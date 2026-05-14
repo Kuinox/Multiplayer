@@ -25,7 +25,6 @@ namespace Multiplayer.Client
             Multiplayer.reloading = true;
 
             var worldGridSaved = Find.WorldGrid;
-            var worldRendererSaved = Find.World.renderer;
             var tweenedPos = new Dictionary<int, Vector3>();
             var drawers = new Dictionary<int, MapDrawer>();
             var localFactionId = Multiplayer.RealPlayerFaction.loadID;
@@ -59,10 +58,10 @@ namespace Multiplayer.Client
                 gameData = SaveGameData();
             }
 
-            // TODO
-            //MapDrawerRegenPatch.copyFrom = drawers;
-            //WorldGridCachePatch.copyFrom = worldGridSaved;
-            //WorldGridExposeDataPatch.copyFrom = worldGridSaved;
+            MapDrawerRegenPatch.copyFrom = drawers;
+            WorldGridCachePatch.copyFrom = worldGridSaved;
+            WorldGridExposeDataPatch.copyFrom = worldGridSaved;
+            WorldRendererCachePatch.copyFrom = worldGridSaved;
 
             MusicManagerPlay musicManager = null;
             if (Find.MusicManagerPlay.gameObjectCreated)
