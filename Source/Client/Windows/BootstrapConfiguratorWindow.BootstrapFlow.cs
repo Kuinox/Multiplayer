@@ -24,6 +24,7 @@ public partial class BootstrapConfiguratorWindow
     private bool saveReady;
     private bool isUploadingSave;
     private bool saveUploadAutoStarted;
+    private bool closeBootstrapModeOnDisconnect;
     private string savedReplayPath;
     private string saveUploadStatus;
     private float saveUploadProgress;
@@ -380,6 +381,7 @@ public partial class BootstrapConfiguratorWindow
         {
             try
             {
+                closeBootstrapModeOnDisconnect = true;
                 connection.SendFragmented(new ClientBootstrapSaveDataPacket(saveData, hash).Serialize());
 
                 OnMainThread.Enqueue(() =>
@@ -392,6 +394,7 @@ public partial class BootstrapConfiguratorWindow
             {
                 OnMainThread.Enqueue(() =>
                 {
+                    closeBootstrapModeOnDisconnect = false;
                     isUploadingSave = false;
                     saveUploadStatus = $"Failed to upload save.zip: {exception.GetType().Name}: {exception.Message}";
                 });
