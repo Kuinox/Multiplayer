@@ -19,8 +19,6 @@ if (settingsPresent)
     settings = TomlSettings.Load(settingsFile);
 else
     ServerLog.Log($"Bootstrap mode: '{settingsFile}' not found. Waiting for a client to upload it.");
-
-settings.EnforceStandaloneRequirements();
 ServerLog.detailEnabled = settings.debugMode;
 ServerLog.verboseEnabled = settings.debugMode;
 

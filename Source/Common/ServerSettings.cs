@@ -32,12 +32,6 @@ namespace Multiplayer.Common
         public bool pauseOnDesync = true;
         public TimeControl timeControl;
 
-        public void EnforceStandaloneRequirements()
-        {
-            if (multifaction)
-                asyncTime = true;
-        }
-
         public string? TryParseEndpoints(out IPEndPoint[] endpoints)
         {
             var split = directAddress.Split(MultiplayerServer.EndpointSeparator);
