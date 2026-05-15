@@ -175,7 +175,7 @@ public partial class BootstrapConfiguratorWindow
         postMapEnterSaveDelayRemaining = PostMapEnterSaveDelaySeconds;
         awaitingControllablePawns = true;
         bootstrapSaveQueued = false;
-        saveUploadStatus = "Map initialized. Waiting before saving...";
+        saveUploadStatus = "Map initialized. Waiting for controllable colonists to spawn...";
 
         if (Find.WindowStack.WindowOfType<BootstrapConfiguratorWindow>() == null)
             Find.WindowStack.Add(this);
