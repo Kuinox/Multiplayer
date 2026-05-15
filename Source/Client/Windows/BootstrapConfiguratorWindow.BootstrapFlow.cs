@@ -335,19 +335,27 @@ public partial class BootstrapConfiguratorWindow
     private void ReturnToMenuAndReconnect()
     {
         GenScene.GoToMainMenu();
-        OnMainThread.Enqueue(() =>
+        LongEventHandler.ExecuteWhenFinished(ReconnectAfterReturningToMenu);
+    }
+
+    private void ReconnectAfterReturningToMenu()
+    {
+        if (Current.ProgramState != ProgramState.Entry || Current.Game != null)
         {
-            saveUploadStatus = "Reconnecting to upload save...";
-            Multiplayer.StopMultiplayer();
+            saveUploadStatus = "Waiting to finish returning to menu...";
+            LongEventHandler.ExecuteWhenFinished(ReconnectAfterReturningToMenu);
+            return;
+        }
 
-            if (reconnectConnector == null)
-            {
-                saveUploadStatus = "No connector available to reconnect to the bootstrap server.";
-                return;
-            }
+        saveUploadStatus = "Reconnecting to upload save...";
 
-            ClientUtil.TryConnectWithWindow(reconnectConnector, false);
-        });
+        if (reconnectConnector == null)
+        {
+            saveUploadStatus = "No connector available to reconnect to the bootstrap server.";
+            return;
+        }
+
+        ClientUtil.TryConnectWithWindow(reconnectConnector, false);
     }
 
     private void StartUploadSaveZip()
