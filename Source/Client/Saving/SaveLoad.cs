@@ -20,7 +20,7 @@ namespace Multiplayer.Client
 
     public static class SaveLoad
     {
-        public static TempGameData SaveAndReload()
+        public static TempGameData SaveAndReload(bool cache = false)
         {
             Multiplayer.reloading = true;
 
@@ -58,10 +58,20 @@ namespace Multiplayer.Client
                 gameData = SaveGameData();
             }
 
-            MapDrawerRegenPatch.copyFrom = drawers;
-            WorldGridCachePatch.copyFrom = worldGridSaved;
-            WorldGridExposeDataPatch.copyFrom = worldGridSaved;
-            WorldRendererCachePatch.copyFrom = worldGridSaved;
+            if (cache)
+            {
+                MapDrawerRegenPatch.copyFrom = drawers;
+                WorldGridCachePatch.copyFrom = worldGridSaved;
+                WorldGridExposeDataPatch.copyFrom = worldGridSaved;
+                WorldRendererCachePatch.copyFrom = worldGridSaved;
+            }
+            else
+            {
+                MapDrawerRegenPatch.copyFrom.Clear();
+                WorldGridCachePatch.copyFrom = null;
+                WorldGridExposeDataPatch.copyFrom = null;
+                WorldRendererCachePatch.copyFrom = null;
+            }
 
             MusicManagerPlay musicManager = null;
             if (Find.MusicManagerPlay.gameObjectCreated)
