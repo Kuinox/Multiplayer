@@ -71,10 +71,10 @@ namespace Multiplayer.Common
             ServerPlayer player = conn.serverPlayer;
             Players.Remove(player);
 
-            if (player.IsHost && server.worldData.CreatingJoinPoint)
+            if (server.worldData.CreatingJoinPoint && (player.IsHost || !Players.Any(p => p.hasJoined)))
             {
                 server.worldData.AbortJoinPointCreation();
-                ServerLog.Log("Aborted join point creation because the host disconnected.");
+                ServerLog.Log("Aborted join point creation because no players remain.");
             }
 
             if (player.hasJoined)
