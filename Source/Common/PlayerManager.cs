@@ -74,7 +74,7 @@ namespace Multiplayer.Common
             if (server.worldData.CreatingJoinPoint && (player.IsHost || !Players.Any(p => p.hasJoined)))
             {
                 server.worldData.AbortJoinPointCreation();
-                ServerLog.Log("Aborted join point creation because no joined players remain.");
+                ServerLog.Log("Aborted join point creation because no players remain.");
             }
 
             if (player.hasJoined)
