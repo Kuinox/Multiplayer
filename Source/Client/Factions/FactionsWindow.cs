@@ -51,6 +51,21 @@ public class FactionsWindow : Window
 
                 using (MpStyle.Set(GameFont.Medium))
                     Layouter.Label(faction.Name);
+
+                var colorRect = Layouter.Rect(20f, 20f);
+                Widgets.DrawBoxSolid(colorRect.ContractedBy(2f), faction.Color);
+                Widgets.DrawBox(colorRect);
+                Widgets.DrawHighlightIfMouseover(colorRect);
+
+                if (Widgets.ButtonInvisible(colorRect))
+                {
+                    Find.WindowStack.Add(new Dialog_ChooseFactionColor(color =>
+                    {
+                        FactionCreator.ChangeFactionColor(faction, color);
+                    }, faction.Color));
+                }
+
+                TooltipHandler.TipRegion(colorRect, "MpChangeFactionColor".Translate());
             }
             Layouter.EndHorizontal();
 

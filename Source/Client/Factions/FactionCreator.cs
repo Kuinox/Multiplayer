@@ -31,6 +31,15 @@ public static class FactionCreator
     }
 
     [SyncMethod]
+    public static void ChangeFactionColor(Faction faction, Color color)
+    {
+        if (faction is not { IsPlayer: true })
+            return;
+
+        faction.color = color;
+    }
+
+    [SyncMethod]
     public static void CreateFaction(int playerId, FactionCreationData creationData)
     {
         var executingOnlyOnIssuer = TickPatch.currentExecutingCmdIssuedBySelf;
@@ -286,4 +295,3 @@ public record FactionCreationData : ISyncSimple
     public List<ThingDefCount> startingPossessions;
     public bool setupNextMapFromTickZero;
 }
-
