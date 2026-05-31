@@ -58,20 +58,10 @@ namespace Multiplayer.Client
                 gameData = SaveGameData();
             }
 
-            if (cache)
-            {
-                MapDrawerRegenPatch.copyFrom = drawers;
-                WorldGridCachePatch.copyFrom = worldGridSaved;
-                WorldGridExposeDataPatch.copyFrom = worldGridSaved;
-                WorldRendererCachePatch.copyFrom = worldGridSaved;
-            }
-            else
-            {
-                MapDrawerRegenPatch.copyFrom.Clear();
-                WorldGridCachePatch.copyFrom = null;
-                WorldGridExposeDataPatch.copyFrom = null;
-                WorldRendererCachePatch.copyFrom = null;
-            }
+            MapDrawerRegenPatch.copyFrom.Clear();
+            WorldGridCachePatch.copyFrom = null;
+            WorldGridExposeDataPatch.copyFrom = null;
+            WorldRendererCachePatch.copyFrom = null;
 
             MusicManagerPlay musicManager = null;
             if (Find.MusicManagerPlay.gameObjectCreated)
