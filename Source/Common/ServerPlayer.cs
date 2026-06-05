@@ -33,6 +33,7 @@ namespace Multiplayer.Common
         // Track which map the player is currently on
         public int currentMapId = -1;
         public bool hasReportedCurrentMap;
+        public bool helpOnlyUsableCommands;
 
         public string Username => conn.username;
         public int Latency => conn.Latency;
@@ -129,6 +130,7 @@ namespace Multiplayer.Common
         }
 
         public void SendMsg(string msg) => SendPacket(ServerChatPacket.Create(msg));
+        public void SendRawMsg(string msg) => SendPacket(ServerChatPacket.CreateRaw(msg));
     }
 
     public enum PlayerStatus : byte

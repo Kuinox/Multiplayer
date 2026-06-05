@@ -288,8 +288,8 @@ namespace Multiplayer.Client
 
             foreach (ChatMsg msg in Multiplayer.session.messages)
             {
-                float height = Text.CalcHeight(msg.Msg, width - 20f);
-                float textWidth = Text.CalcSize(msg.Msg).x + 15;
+                CalculateMessageSize(msg, width, out var height, out var textWidth);
+
                 Rect msgRect = new Rect(20f, yPos, width - 20f, height);
 
                 if (Mouse.IsOver(msgRect))
@@ -310,7 +310,7 @@ namespace Multiplayer.Client
                     GUI.color = new Color(0.8f, 0.8f, 1);
 
                 GUI.SetNextControlName("chat_msg_" + i++);
-                Widgets.TextArea(msgRect, msg.Msg, true);
+                DrawMessageTextArea(msgRect, msg);
 
                 if (mouseOver && msg.Clickable)
                 {
@@ -362,7 +362,7 @@ namespace Multiplayer.Client
             if (Multiplayer.Client == null)
                 Multiplayer.session.AddMsg(Multiplayer.username + ": " + currentMsg);
             else
-                Multiplayer.Client.Send(ClientChatPacket.Create(currentMsg));
+                Multiplayer.Client.Send(ClientChatPacket.Create(currentMsg, Multiplayer.settings.helpOnlyUsableCommands));
 
             currentMsg = "";
         }
@@ -429,6 +429,33 @@ namespace Multiplayer.Client
             chatScroll.y = messagesHeight;
         }
 
+        private static void CalculateMessageSize(ChatMsg msg, float width, out float height, out float textWidth)
+        {
+            var style = msg.RawMessage ? RawTextAreaStyle() : Text.CurTextAreaReadOnlyStyle;
+            var content = new GUIContent(msg.Msg);
+            height = style.CalcHeight(content, width - 20f);
+            textWidth = style.CalcSize(content).x + 15;
+        }
+
+        private static void DrawMessageTextArea(Rect rect, ChatMsg msg)
+        {
+            if (!msg.RawMessage)
+            {
+                Widgets.TextArea(rect, msg.Msg, true);
+                return;
+            }
+
+            GUI.Label(rect, msg.Msg, RawTextAreaStyle());
+        }
+
+        private static GUIStyle RawTextAreaStyle()
+        {
+            return new GUIStyle(Text.CurTextAreaReadOnlyStyle)
+            {
+                richText = false
+            };
+        }
+
         public override void PostClose()
         {
             if (Multiplayer.session != null && saveSize)
@@ -474,6 +501,7 @@ namespace Multiplayer.Client
     public abstract class ChatMsg
     {
         public virtual bool Clickable => false;
+        public virtual bool RawMessage => false;
         public abstract string Msg { get; }
         public virtual DateTime TimeStamp { get; }
 
@@ -488,10 +516,12 @@ namespace Multiplayer.Client
     public class ChatMsg_Text : ChatMsg
     {
         public override string Msg { get; }
+        public override bool RawMessage { get; }
 
-        public ChatMsg_Text(string msg)
+        public ChatMsg_Text(string msg, bool rawMessage = false)
         {
             this.Msg = msg;
+            this.RawMessage = rawMessage;
         }
     }
 

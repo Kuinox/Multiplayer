@@ -92,7 +92,7 @@ namespace Multiplayer.Client
         }
 
         [TypedPacketHandler]
-        public void HandleChat(ServerChatPacket packet) => Multiplayer.session.AddMsg(packet.msg);
+        public void HandleChat(ServerChatPacket packet) => Multiplayer.session.AddMsg(packet.msg, rawMessage: packet.rawMessage);
 
         [TypedPacketHandler]
         public void HandleCursor(ServerCursorPacket packet)
@@ -203,6 +203,9 @@ namespace Multiplayer.Client
 
         [TypedPacketHandler]
         public void HandleDebug(ServerDebugPacket _) => Rejoiner.DoRejoin();
+
+        [TypedPacketHandler]
+        public void HandleRequestRejoin(ServerRequestRejoinPacket _) => Rejoiner.DoRejoin();
 
         [TypedPacketHandler]
         public void HandleSetFaction(ServerSetFactionPacket packet)

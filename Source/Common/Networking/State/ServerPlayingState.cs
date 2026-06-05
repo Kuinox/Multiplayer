@@ -63,6 +63,8 @@ namespace Multiplayer.Common
         [TypedPacketHandler]
         public void HandleChat(ClientChatPacket packet)
         {
+            Player.helpOnlyUsableCommands = packet.helpOnlyUsableCommands;
+
             string msg = packet.msg;
             msg = msg.Trim();
 
@@ -74,7 +76,7 @@ namespace Multiplayer.Common
             if (msg[0] == '/')
             {
                 var cmd = msg[1..];
-                Server.HandleChatCmd(Player, cmd);
+                Server.HandleChatCommand(Player, cmd);
             }
             else
             {

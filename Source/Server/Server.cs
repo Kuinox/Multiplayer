@@ -123,7 +123,7 @@ while (server.running)
     {
         var cmd = Console.ReadLine();
         if (cmd != null)
-            server.Enqueue(() => server.HandleChatCmd(consoleSource, cmd));
+            server.Enqueue(() => server.HandleChatCommand(consoleSource, cmd));
 
         if (cmd == stopCmd)
             break;
@@ -139,5 +139,10 @@ class ConsoleSource : IChatSource
     public void SendMsg(string msg)
     {
         ServerLog.Log(msg);
+    }
+
+    public void SendRawMsg(string msg)
+    {
+        SendMsg(msg);
     }
 }
