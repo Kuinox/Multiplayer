@@ -3,7 +3,6 @@ using Multiplayer.Common;
 using RimWorld;
 using System.Collections.Generic;
 using System.IO;
-using Multiplayer.Common.Networking.Packet;
 using UnityEngine;
 using Verse;
 
@@ -206,7 +205,7 @@ public class SaveGameWindow : Window
                 if (!Autosaving.SaveGameToFile_Overwrite(curText, currentReplay))
                     return;
 
-                Multiplayer.Client.Send(new ClientAutosavingPacket(JoinPointRequestReason.Save));
+                Autosaving.SendAutosavingRequest(JoinPointRequestReason.Save);
             }, "MpSaving", false, null);
             Close();
         }

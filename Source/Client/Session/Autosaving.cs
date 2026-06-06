@@ -20,7 +20,7 @@ public static class Autosaving
             if (!SaveGameToFile_Overwrite(GetNextAutosaveFileName(), snapshot))
                 return;
 
-            Multiplayer.Client.Send(new ClientAutosavingPacket(JoinPointRequestReason.Save));
+            SendAutosavingRequest(JoinPointRequestReason.Save);
 
             // When connected to a standalone server, also upload fresh snapshots
             if (Multiplayer.session?.ConnectedToStandaloneServer == true)
@@ -29,6 +29,14 @@ public static class Autosaving
                 SaveLoad.SendStandaloneWorldSnapshot(snapshot);
             }
         }, "MpSaving", false, null);
+    }
+
+    public static void SendAutosavingRequest(JoinPointRequestReason reason)
+    {
+        if (TickPatch.Simulating)
+            return;
+
+        Multiplayer.Client.Send(new ClientAutosavingPacket(reason));
     }
 
     private static string GetNextAutosaveFileName()
