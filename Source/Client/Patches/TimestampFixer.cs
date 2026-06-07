@@ -96,8 +96,12 @@ static class PawnSpawn_FixTimestamp
         if (Multiplayer.Client == null) return;
         if (__instance.Map == null) return;
 
-        if (__instance.GetComp<MultiplayerPawnComp>().worldPawnRemoveTick == Multiplayer.AsyncWorldTime.worldTicks)
+        var comp = __instance.GetComp<MultiplayerPawnComp>();
+        if (comp.worldPawnRemoveTick != -1)
+        {
             TimestampFixer.FixPawn(__instance, null, __instance.Map);
+            comp.worldPawnRemoveTick = -1;
+        }
     }
 }
 
@@ -110,6 +114,9 @@ static class WorldPawnsAddPawn_FixTimestamp
 
         var lastMap = p.GetComp<MultiplayerPawnComp>().lastMap;
         if (lastMap != -1)
+        {
             TimestampFixer.FixPawn(p, Find.Maps.FirstOrDefault(m => m.uniqueID == lastMap), null);
+            p.GetComp<MultiplayerPawnComp>().lastMap = -1;
+        }
     }
 }
