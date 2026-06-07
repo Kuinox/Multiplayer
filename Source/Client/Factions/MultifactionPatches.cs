@@ -860,7 +860,7 @@ static class QuestPart_LendColonistsToFaction_Enable_Patch
 [HarmonyPatch(typeof(Map), nameof(Map.IsPlayerHome), MethodType.Getter)]
 static class Map_IsPlayerHome_Spectator_Patch
 {
-    static bool Prefix(Map __instance, bool __result)
+    static bool Prefix(Map __instance, ref bool __result)
     {
         if (Multiplayer.Client == null || !Multiplayer.GameComp.multifaction ||
             Faction.OfPlayer != Multiplayer.WorldComp.spectatorFaction)
