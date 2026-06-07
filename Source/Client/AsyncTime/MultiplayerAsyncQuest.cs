@@ -31,12 +31,17 @@ namespace Multiplayer.Client.Comp
     [HarmonyPatch(typeof(QuestGen), nameof(QuestGen.Generate))]
     static class CacheQuestAfterGeneration
     {
-        static void Postfix(ref Quest __result)
+        static void Prefix(ref int __state)
+        {
+            __state = Find.TickManager.TicksGame;
+        }
+
+        static void Postfix(ref Quest __result, int __state)
         {
             if (Multiplayer.Client == null) return;
             if (!Multiplayer.GameComp.asyncTime) return;
 
-            MultiplayerAsyncQuest.CacheQuest(__result);
+            MultiplayerAsyncQuest.CacheGeneratedQuest(__result, __state);
         }
     }
 
@@ -130,6 +135,8 @@ namespace Multiplayer.Client.Comp
         //Probably should move this to a class so its not a Dictionary of Lists
         private static readonly Dictionary<AsyncTimeComp, List<Quest>> mapQuestsCache = new Dictionary<AsyncTimeComp, List<Quest>>();
         private static readonly List<Quest> worldQuestsCache = new List<Quest>();
+        private static readonly AccessTools.FieldRef<QuestPartActivable, int> QuestPartEnableTick =
+            AccessTools.FieldRefAccess<QuestPartActivable, int>("enableTick");
 
         //List of quest parts that have mapParent as field
         private static readonly List<Type> questPartsToCheck = new List<Type>()
@@ -215,6 +222,15 @@ namespace Multiplayer.Client.Comp
             return mapAsyncTimeComp;
         }
 
+        public static AsyncTimeComp CacheGeneratedQuest(Quest quest, int generationTicks)
+        {
+            var mapAsyncTimeComp = CacheQuest(quest);
+            if (mapAsyncTimeComp != null)
+                TranslateGeneratedQuestTicks(quest, generationTicks, mapAsyncTimeComp.mapTicks);
+
+            return mapAsyncTimeComp;
+        }
+
         /// <summary>
         /// Clears all cache for both mapQuestsCache and worldQuestsCache as they are static and requires manually clearing on load
         /// </summary>
@@ -254,6 +270,26 @@ namespace Multiplayer.Client.Comp
             {
                 quest.QuestTick();
             }
+        }
+
+        private static void TranslateGeneratedQuestTicks(Quest quest, int sourceTicks, int targetTicks)
+        {
+            int offset = targetTicks - sourceTicks;
+            if (offset == 0) return;
+
+            TranslateTick(ref quest.appearanceTick, offset);
+            TranslateTick(ref quest.acceptanceTick, offset);
+            TranslateTick(ref quest.acceptanceExpireTick, offset);
+            TranslateTick(ref quest.cleanupTick, offset);
+
+            foreach (var part in quest.parts.OfType<QuestPartActivable>())
+                TranslateTick(ref QuestPartEnableTick(part), offset);
+        }
+
+        private static void TranslateTick(ref int tick, int offset)
+        {
+            if (tick >= 0)
+                tick += offset;
         }
 
         /// <summary>
