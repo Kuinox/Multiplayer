@@ -17,6 +17,10 @@ namespace Multiplayer.Common
 
         protected override void OnClose(ServerDisconnectPacket? goodbye)
         {
+            ServerLog.Log(LiteNetDiagnostics.Next(
+                "connection/close",
+                $"{LiteNetDiagnostics.Peer(peer)} appState={State} username={username ?? "null"} " +
+                $"goodbyeReason={(goodbye.HasValue ? goodbye.Value.reason.ToString() : "none")}"));
             if (goodbye.HasValue)
                 peer.Disconnect(goodbye.Value.Serialize().data);
             else

@@ -38,6 +38,9 @@ namespace Multiplayer.Client.Networking
             var peer = netClient.Connect(address, port, "");
             var conn = new ClientLiteNetConnection(peer, netClient);
             peer.SetConnection(conn);
+            MpLog.Log(LiteNetDiagnostics.Next(
+                "client/connect",
+                $"target={address}:{port} localPort={netClient.LocalPort} {LiteNetDiagnostics.Peer(peer)}"));
             return conn;
         }
 
@@ -52,6 +55,12 @@ namespace Multiplayer.Client.Networking
 
         protected override void OnClose(ServerDisconnectPacket? goodbye)
         {
+            MpLog.Log(LiteNetDiagnostics.Next(
+                "client/close",
+                $"{LiteNetDiagnostics.Peer(peer)} appState={State} " +
+                $"goodbyeReason={(goodbye.HasValue ? goodbye.Value.reason.ToString() : "none")} " +
+                $"managerRunning={netManager.IsRunning} managerPeers={netManager.ConnectedPeersCount} " +
+                $"managerStats={netManager.Statistics.ToDebugString().Replace(Environment.NewLine, " ").Trim()}"));
             base.OnClose(goodbye);
             netManager.Stop();
         }
@@ -65,12 +74,16 @@ namespace Multiplayer.Client.Networking
             {
                 var conn = GetConnection(peer);
                 conn.ChangeState(new ClientJoiningState(conn, username));
-                MpLog.Log("Net client connected");
+                MpLog.Log(LiteNetDiagnostics.Next(
+                    "client/connected",
+                    $"{LiteNetDiagnostics.Peer(peer)} appState={conn.State} username={username}"));
             }
 
             public void OnNetworkError(IPEndPoint endPoint, SocketError error)
             {
-                MpLog.Warn($"Net client error {error}");
+                MpLog.Warn(LiteNetDiagnostics.Next(
+                    "client/network-error",
+                    $"endpoint={endPoint} socketError={error}"));
             }
 
             public void OnNetworkReceive(NetPeer peer, NetPacketReader reader, byte channelNumber, DeliveryMethod method)
@@ -81,6 +94,11 @@ namespace Multiplayer.Client.Networking
 
             public void OnPeerDisconnected(NetPeer peer, DisconnectInfo info)
             {
+                var conn = GetConnection(peer);
+                MpLog.Warn(LiteNetDiagnostics.Next(
+                    "client/disconnected",
+                    $"{LiteNetDiagnostics.Disconnect(peer, info)} appState={conn.State} username={username}"));
+
                 MpDisconnectReason reason;
                 ByteReader reader;
 
@@ -101,8 +119,10 @@ namespace Multiplayer.Client.Networking
                     reason = reader.ReadEnum<MpDisconnectReason>();
                 }
 
-                GetConnection(peer).OnDisconnect(SessionDisconnectInfo.From(reason, reader));
-                MpLog.Log($"Net client disconnected {info.Reason}");
+                conn.OnDisconnect(SessionDisconnectInfo.From(reason, reader));
+                MpLog.Log(LiteNetDiagnostics.Next(
+                    "client/disconnect-processed",
+                    $"netReason={info.Reason} appReason={reason} appState={conn.State} username={username}"));
             }
 
             public void OnConnectionRequest(ConnectionRequest request)
@@ -126,10 +146,21 @@ namespace Multiplayer.Client.Networking
 
         public void WriteNet(NetLogLevel level, string str, params object[] args)
         {
+            string message;
+            try
+            {
+                message = string.Format(str, args);
+            }
+            catch (FormatException)
+            {
+                message = $"{str} [formatArgs={string.Join(", ", args)}]";
+            }
+
+            message = LiteNetDiagnostics.Next($"library/{level}", message);
             if (level == NetLogLevel.Error)
-                ServerLog.Error(string.Format(str, args));
+                ServerLog.Error(message);
             else
-                ServerLog.Log(string.Format(str, args));
+                ServerLog.Log(message);
         }
     }
 }
