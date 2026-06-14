@@ -1,6 +1,8 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
+using HarmonyLib;
 using LiteNetLib;
 using Multiplayer.Client.Util;
 using Multiplayer.Common;
@@ -161,6 +163,37 @@ namespace Multiplayer.Client.Networking
                 ServerLog.Error(message);
             else
                 ServerLog.Log(message);
+        }
+    }
+
+    [HarmonyPatch]
+    static class LiteNetPeerNotFoundSendPatch
+    {
+        // PacketProperty is internal in LiteNetLib 1.3.1. Its stable wire value is 14.
+        private const byte PeerNotFoundProperty = 14;
+
+        static MethodBase TargetMethod() =>
+            AccessTools.DeclaredMethod(
+                typeof(NetManager),
+                "SendRaw",
+                [typeof(byte[]), typeof(int), typeof(int), typeof(IPEndPoint)]);
+
+        static void Prefix(NetManager __instance, byte[] message, int start, int length, IPEndPoint remoteEndPoint)
+        {
+            if (message == null || length < 1 || start < 0 || start >= message.Length)
+                return;
+            if ((message[start] & 0x1F) != PeerNotFoundProperty)
+                return;
+
+            var knownPeer = __instance.ConnectedPeerList.Find(peer => peer.Equals(remoteEndPoint));
+            ServerLog.Log(LiteNetDiagnostics.Next(
+                "server/send-peer-not-found",
+                $"destination={remoteEndPoint} packetLength={length} responseFlag=" +
+                $"{(length > 1 && start + 1 < message.Length ? message[start + 1].ToString() : "none")} " +
+                $"managerRunning={__instance.IsRunning} localPort={__instance.LocalPort} " +
+                $"managerPeers={__instance.ConnectedPeersCount} knownPeer={knownPeer != null} " +
+                $"peer={(knownPeer != null ? LiteNetDiagnostics.Peer(knownPeer) : "none")} " +
+                $"managerStats={__instance.Statistics.ToSingleLineDebugString()}"));
         }
     }
 }
