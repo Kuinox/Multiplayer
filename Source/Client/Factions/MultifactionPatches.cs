@@ -871,7 +871,7 @@ static class Map_IsPlayerHome_Spectator_Patch
             if (!__instance.wasSpawnedViaGravShipLanding)
             {
                 MapInfo mapInfo = __instance.info;
-                if (((mapInfo != null) ? mapInfo.parent : null) == null || __instance.info.parent.Faction.IsPlayer == false || !__instance.info.parent.def.canBePlayerHome)
+                if (((mapInfo != null) ? mapInfo.parent : null) == null || __instance.info.parent.Faction?.IsPlayer != true || !__instance.info.parent.def.canBePlayerHome)
                 {
                     __result = GravshipUtility.PlayerHasGravEngine(__instance);
                     return false;
