@@ -280,6 +280,9 @@ namespace Multiplayer.Client
             SyncDelegate.Lambda(typeof(Pawn_TrainingTracker), nameof(Pawn_TrainingTracker.GetGizmos), 0, fields: [SyncDelegate.DelegateThis, "master"]).SetContext(SyncContext.MapSelected).CancelIfNoSelectedMapObjects(); // Force attack target
             SyncDelegate.Lambda(typeof(Pawn_TrainingTracker), nameof(Pawn_TrainingTracker.GetGizmos), 3).SetContext(SyncContext.MapSelected).CancelIfNoSelectedMapObjects(); // Cancel attacking target
 
+            // Colonist bar reordering
+            SyncDelegate.Lambda(typeof(ColonistBar.Entry), null, lambdaOrdinal: 0, parentMethodType: MethodType.Constructor, parentArgs: [typeof(Pawn), typeof(Map), typeof(int)]);
+
             InitRituals();
             InitChoiceLetters();
             InitDevTools();
