@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -9,6 +11,8 @@ namespace Multiplayer.Common
     public class LiteNetManager : INetManager
     {
         public List<(LiteNetEndpoint endpoint, NetManager manager)> netManagers;
+        private readonly Dictionary<NetPeer, int> peerSilenceBuckets = [];
+        private int diagnosticsTick;
 
         private LiteNetManager(List<(LiteNetEndpoint endpoint, NetManager manager)> netManagers) =>
             this.netManagers = netManagers;
@@ -36,7 +40,16 @@ namespace Multiplayer.Common
             foreach (var (endpoint, man) in netManagers)
             {
                 ServerLog.Detail($"Starting NetManager at {endpoint}");
-                success &= man.Start(endpoint.ipv4 ?? IPAddress.Any, endpoint.ipv6 ?? IPAddress.IPv6Any, endpoint.port);
+                var started = man.Start(
+                    endpoint.ipv4 ?? IPAddress.Any,
+                    endpoint.ipv6 ?? IPAddress.IPv6Any,
+                    endpoint.port);
+                success &= started;
+                ServerLog.Log(LiteNetDiagnostics.Next(
+                    "server/manager-start",
+                    $"endpoint={endpoint} started={started} running={man.IsRunning} localPort={man.LocalPort} " +
+                    $"ipv6={man.IPv6Enabled} updateTime={man.UpdateTime}ms pingInterval={man.PingInterval}ms " +
+                    $"disconnectTimeout={man.DisconnectTimeout}ms"));
             }
 
             manager = new LiteNetManager(netManagers);
@@ -56,11 +69,58 @@ namespace Multiplayer.Common
         {
             var managersSnapshot = netManagers.ToArray();
             foreach (var (_, man) in managersSnapshot) man.PollEvents();
+
+            if (++diagnosticsTick % 15 != 0)
+                return;
+
+            var connectedPeers = managersSnapshot
+                .SelectMany(tuple => tuple.manager.ConnectedPeerList)
+                .ToArray();
+            var connectedPeerSet = connectedPeers.ToHashSet();
+
+            foreach (var stalePeer in peerSilenceBuckets.Keys.Where(peer => !connectedPeerSet.Contains(peer)).ToArray())
+                peerSilenceBuckets.Remove(stalePeer);
+
+            foreach (var peer in connectedPeers)
+            {
+                if (peer.TimeSinceLastPacket < 1500f)
+                {
+                    peerSilenceBuckets.Remove(peer);
+                    continue;
+                }
+
+                var silenceBucket = (int)(peer.TimeSinceLastPacket / 500f);
+                if (peerSilenceBuckets.TryGetValue(peer, out var previousBucket) && previousBucket == silenceBucket)
+                    continue;
+
+                peerSilenceBuckets[peer] = silenceBucket;
+                var conn = peer.Tag as LiteNetConnection;
+                ServerLog.Log(LiteNetDiagnostics.Next(
+                    "server/peer-silent",
+                    $"{LiteNetDiagnostics.Peer(peer)} appState={conn?.State.ToString() ?? "null"} " +
+                    $"playerId={conn?.serverPlayer?.id.ToString() ?? "null"} username={conn?.username ?? "null"} " +
+                    $"disconnectTimeout={peer.NetManager.DisconnectTimeout}ms " +
+                    $"{conn?.PacketHistory ?? "packetHistory=unavailable"}"));
+            }
         }
 
         public void Stop()
         {
-            foreach (var (_, man) in netManagers) man.Stop();
+            foreach (var (endpoint, man) in netManagers)
+            {
+                var peers = man.ConnectedPeerList.ToArray();
+                ServerLog.Log(LiteNetDiagnostics.Next(
+                    "server/manager-stop",
+                    $"endpoint={endpoint} running={man.IsRunning} localPort={man.LocalPort} peers={peers.Length} " +
+                    $"stats={man.Statistics.ToSingleLineDebugString()}"));
+                foreach (var peer in peers)
+                    ServerLog.Log(LiteNetDiagnostics.Next(
+                        "server/manager-stop-peer",
+                        LiteNetDiagnostics.Peer(peer)));
+                man.Stop();
+            }
+
+            peerSilenceBuckets.Clear();
             netManagers.Clear();
         }
 
@@ -161,5 +221,10 @@ namespace Multiplayer.Common
             text.AppendLine($"Loss: {stats.PacketLoss} packets ({stats.PacketLossPercent}%)");
             return text.ToString();
         }
+
+        public static string ToSingleLineDebugString(this NetStatistics stats) =>
+            $"recv={stats.PacketsReceived}/{stats.BytesReceived}B " +
+            $"sent={stats.PacketsSent}/{stats.BytesSent}B " +
+            $"loss={stats.PacketLoss}({stats.PacketLossPercent}%)";
     }
 }
