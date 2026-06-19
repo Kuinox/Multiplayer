@@ -597,6 +597,95 @@ static class ValidatePawnPatch
     }
 }
 
+[HarmonyPatch(typeof(Precept_RoleSingle), nameof(Precept_RoleSingle.RecacheActivity))]
+static class RecacheRoleActivityPatch
+{
+    private static MethodInfo colonistBelieverCountCached = AccessTools.PropertyGetter(typeof(Ideo), nameof(Ideo.ColonistBelieverCountCached));
+
+    static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> insts)
+    {
+        foreach (var inst in insts)
+        {
+            if (inst.operand as MethodInfo == colonistBelieverCountCached)
+                inst.operand = AccessTools.Method(typeof(RecacheRoleActivityPatch), nameof(ColonistBelieverCountForCurrentFaction));
+
+            yield return inst;
+        }
+    }
+
+    public static int ColonistBelieverCountForCurrentFaction(Ideo ideo)
+    {
+        if (Multiplayer.Client == null || Multiplayer.GameComp?.multifaction != true)
+            return ideo.ColonistBelieverCountCached;
+
+        var faction = Faction.OfPlayer;
+        int count = 0;
+
+        foreach (var p in PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive_FreeColonists_NoCryptosleep)
+        {
+            if (p.Faction == faction && p.Ideo == ideo && !p.IsSlave && !p.IsQuestLodger())
+                count++;
+        }
+
+        return count;
+    }
+}
+
+[HarmonyPatch(typeof(Precept_Role), nameof(Precept_Role.Active), MethodType.Getter)]
+static class RoleActivePatch
+{
+    static bool Prefix(Precept_Role __instance, ref bool __result)
+    {
+        if (Multiplayer.Client == null || Multiplayer.GameComp?.multifaction != true || __instance is not Precept_RoleSingle || __instance.def.leaderRole)
+            return true;
+
+        if (DebugSettings.activateAllIdeoRoles)
+        {
+            __result = true;
+            return false;
+        }
+
+        if (__instance.def.activationBelieverCount >= 0)
+        {
+            __result = RecacheRoleActivityPatch.ColonistBelieverCountForCurrentFaction(__instance.ideo) >= __instance.def.activationBelieverCount;
+            return false;
+        }
+
+        return true;
+    }
+}
+
+[HarmonyPatch(typeof(SocialCardUtility), nameof(SocialCardUtility.DrawPawnRoleSelection))]
+static class DrawPawnRoleSelectionPatch
+{
+    private static MethodInfo colonistBelieverCountCached = AccessTools.PropertyGetter(typeof(Ideo), nameof(Ideo.ColonistBelieverCountCached));
+
+    static void Prefix(Pawn pawn)
+    {
+        if (Multiplayer.Client == null) return;
+
+        FactionContext.Push(pawn.Faction);
+    }
+
+    static void Finalizer()
+    {
+        if (Multiplayer.Client == null) return;
+
+        FactionContext.Pop();
+    }
+
+    static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> insts)
+    {
+        foreach (var inst in insts)
+        {
+            if (inst.operand as MethodInfo == colonistBelieverCountCached)
+                inst.operand = AccessTools.Method(typeof(RecacheRoleActivityPatch), nameof(RecacheRoleActivityPatch.ColonistBelieverCountForCurrentFaction));
+
+            yield return inst;
+        }
+    }
+}
+
 [HarmonyPatch(typeof(Faction), nameof(Faction.HasGoodwill), MethodType.Getter)]
 static class PlayerFactionsHaveGoodwill
 {
