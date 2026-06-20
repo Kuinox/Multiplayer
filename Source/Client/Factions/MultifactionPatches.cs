@@ -597,6 +597,150 @@ static class ValidatePawnPatch
     }
 }
 
+static class IdeoBelieverCountPatch
+{
+    private static readonly AccessTools.FieldRef<Ideo, int> ColonistBelieverCountCached =
+        AccessTools.FieldRefAccess<Ideo, int>("colonistBelieverCountCached");
+
+    public static int ColonistBelieverCountForCurrentFaction(Ideo ideo)
+    {
+        if (Multiplayer.Client == null || Multiplayer.GameComp?.multifaction != true)
+            return ColonistBelieverCountCached(ideo);
+
+        if (Faction.OfPlayer is not { def.isPlayer: true })
+            return ColonistBelieverCountCached(ideo);
+
+        return ColonistBelieverCountForFaction(ideo, Faction.OfPlayer);
+    }
+
+    public static int ColonistBelieverCountForFaction(Ideo ideo, Faction faction)
+    {
+        int count = 0;
+
+        foreach (var p in PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive_FreeColonists_NoCryptosleep)
+        {
+            if (p.Faction == faction && p.Ideo == ideo && !p.IsSlave && !p.IsQuestLodger())
+                count++;
+        }
+
+        return count;
+    }
+}
+
+[HarmonyPatch(typeof(Ideo), nameof(Ideo.ColonistBelieverCountCached), MethodType.Getter)]
+static class IdeoColonistBelieverCountCachedPatch
+{
+    static bool Prefix(Ideo __instance, ref int __result)
+    {
+        if (Multiplayer.Client == null || Multiplayer.GameComp?.multifaction != true)
+            return true;
+
+        var faction = Faction.OfPlayer;
+        if (faction is not { def.isPlayer: true })
+            return true;
+
+        __result = IdeoBelieverCountPatch.ColonistBelieverCountForFaction(__instance, faction);
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(Precept_Role), nameof(Precept_Role.Active), MethodType.Getter)]
+static class RoleActivePatch
+{
+    static bool Prefix(Precept_Role __instance, ref bool __result)
+    {
+        if (Multiplayer.Client == null || Multiplayer.GameComp?.multifaction != true || __instance is not Precept_RoleSingle || __instance.def.leaderRole)
+            return true;
+
+        if (DebugSettings.activateAllIdeoRoles)
+        {
+            __result = true;
+            return false;
+        }
+
+        if (__instance.def.activationBelieverCount >= 0)
+        {
+            __result = IdeoBelieverCountPatch.ColonistBelieverCountForCurrentFaction(__instance.ideo) >= __instance.def.activationBelieverCount;
+            return false;
+        }
+
+        return true;
+    }
+}
+
+[HarmonyPatch(typeof(Ideo), nameof(Ideo.ObligationsActive), MethodType.Getter)]
+static class IdeoObligationsEnabledPatch
+{
+    private static FieldInfo colonistBelieverCountCached = AccessTools.Field(typeof(Ideo), "colonistBelieverCountCached");
+
+    static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> insts)
+    {
+        foreach (var inst in insts)
+        {
+            if (inst.opcode == OpCodes.Ldfld && inst.operand as FieldInfo == colonistBelieverCountCached)
+                yield return new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(IdeoBelieverCountPatch), nameof(IdeoBelieverCountPatch.ColonistBelieverCountForCurrentFaction)));
+            else
+                yield return inst;
+        }
+    }
+}
+
+[HarmonyPatch(typeof(SituationalThoughtHandler), nameof(SituationalThoughtHandler.UpdateAllMoodThoughts))]
+static class UpdateAllMoodThoughtsFactionContextPatch
+{
+    [HarmonyPriority(MpPriority.MpFirst)]
+    static void Prefix(SituationalThoughtHandler __instance)
+    {
+        if (Multiplayer.Client == null) return;
+
+        FactionContext.Push(__instance.pawn?.Faction);
+    }
+
+    static void Finalizer()
+    {
+        if (Multiplayer.Client == null) return;
+
+        FactionContext.Pop();
+    }
+}
+
+[HarmonyPatch(typeof(Thought_Situational), nameof(Thought_Situational.RecalculateState))]
+static class RecalculateThoughtStateFactionContextPatch
+{
+    [HarmonyPriority(MpPriority.MpFirst)]
+    static void Prefix(Thought_Situational __instance)
+    {
+        if (Multiplayer.Client == null) return;
+
+        FactionContext.Push(__instance.pawn?.Faction);
+    }
+
+    static void Finalizer()
+    {
+        if (Multiplayer.Client == null) return;
+
+        FactionContext.Pop();
+    }
+}
+
+[HarmonyPatch(typeof(SocialCardUtility), nameof(SocialCardUtility.DrawPawnRoleSelection))]
+static class DrawPawnRoleSelectionPatch
+{
+    static void Prefix(Pawn pawn)
+    {
+        if (Multiplayer.Client == null) return;
+
+        FactionContext.Push(pawn.Faction);
+    }
+
+    static void Finalizer()
+    {
+        if (Multiplayer.Client == null) return;
+
+        FactionContext.Pop();
+    }
+}
+
 [HarmonyPatch(typeof(Faction), nameof(Faction.HasGoodwill), MethodType.Getter)]
 static class PlayerFactionsHaveGoodwill
 {
