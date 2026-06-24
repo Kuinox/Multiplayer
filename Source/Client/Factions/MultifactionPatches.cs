@@ -472,24 +472,25 @@ static class RecacheColonistBelieverCountPatch
         foreach (var inst in insts)
         {
             if (inst.operand as MethodInfo == allColonists)
-                inst.operand = AccessTools.Method(typeof(RecacheColonistBelieverCountPatch), nameof(ColonistsAllPlayerFactions));
+                inst.operand = AccessTools.Method(typeof(RecacheColonistBelieverCountPatch), nameof(ColonistsCurrentPlayerFaction));
             yield return inst;
         }
     }
 
-    private static List<Pawn> colonistsAllFactions = new();
+    private static List<Pawn> colonistsCurrentFaction = new();
 
-    private static List<Pawn> ColonistsAllPlayerFactions()
+    private static List<Pawn> ColonistsCurrentPlayerFaction()
     {
-        colonistsAllFactions.Clear();
+        colonistsCurrentFaction.Clear();
+        Faction faction = Faction.OfPlayer;
 
         foreach (var p in PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive)
         {
-            if (IsColonistAnyFaction(p) && p.HostFaction == null && !p.InCryptosleep)
-                colonistsAllFactions.Add(p);
+            if (p.Faction == faction && IsColonistAnyFaction(p) && p.HostFaction == null && !p.InCryptosleep)
+                colonistsCurrentFaction.Add(p);
         }
 
-        return colonistsAllFactions;
+        return colonistsCurrentFaction;
     }
 
     // Note: IsColonist is patched above to compare to Faction.OfPlayer
@@ -599,12 +600,32 @@ static class ValidatePawnPatch
 
 static class RoleBelieverCountPatch
 {
+    [HarmonyPatch(typeof(Ideo), nameof(Ideo.ColonistBelieverCountCached), MethodType.Getter)]
+    static class ColonistBelieverCountCachedPatch
+    {
+        static bool Prefix(Ideo __instance, ref int __result)
+        {
+            if (Multiplayer.Client == null || Multiplayer.GameComp?.multifaction != true)
+                return true;
+
+            __result = ColonistBelieverCountForCurrentFaction(__instance);
+            return false;
+        }
+    }
+
     public static int ColonistBelieverCountForCurrentFaction(Ideo ideo)
     {
         if (Multiplayer.Client == null || Multiplayer.GameComp?.multifaction != true)
             return ideo.ColonistBelieverCountCached;
 
-        var faction = Faction.OfPlayer;
+        return ColonistBelieverCountForFaction(ideo, Faction.OfPlayer);
+    }
+
+    public static int ColonistBelieverCountForFaction(Ideo ideo, Faction faction)
+    {
+        if (faction == null)
+            return 0;
+
         int count = 0;
 
         foreach (var p in PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive_FreeColonists_NoCryptosleep)
@@ -622,7 +643,7 @@ static class RoleActivePatch
 {
     static bool Prefix(Precept_Role __instance, ref bool __result)
     {
-        if (Multiplayer.Client == null || Multiplayer.GameComp?.multifaction != true || __instance is not Precept_RoleSingle || __instance.def.leaderRole)
+        if (Multiplayer.Client == null || Multiplayer.GameComp?.multifaction != true || __instance is not Precept_RoleSingle roleSingle)
             return true;
 
         if (DebugSettings.activateAllIdeoRoles)
@@ -633,7 +654,8 @@ static class RoleActivePatch
 
         if (__instance.def.activationBelieverCount >= 0)
         {
-            __result = RoleBelieverCountPatch.ColonistBelieverCountForCurrentFaction(__instance.ideo) >= __instance.def.activationBelieverCount;
+            Faction faction = roleSingle.ChosenPawnSingle()?.Faction ?? Faction.OfPlayer;
+            __result = RoleBelieverCountPatch.ColonistBelieverCountForFaction(__instance.ideo, faction) >= __instance.def.activationBelieverCount;
             return false;
         }
 
@@ -654,23 +676,6 @@ static class IdeoObligationsEnabledPatch
                 yield return new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(RoleBelieverCountPatch), nameof(RoleBelieverCountPatch.ColonistBelieverCountForCurrentFaction)));
             else
                 yield return inst;
-        }
-    }
-}
-
-[HarmonyPatch(typeof(Alert_IdeoBuildingMissing), nameof(Alert_IdeoBuildingMissing.GetReport))]
-static class AlertIdeoBuildingMissingPatch
-{
-    private static MethodInfo colonistBelieverCountCached = AccessTools.PropertyGetter(typeof(Ideo), nameof(Ideo.ColonistBelieverCountCached));
-
-    static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> insts)
-    {
-        foreach (var inst in insts)
-        {
-            if (inst.operand as MethodInfo == colonistBelieverCountCached)
-                inst.operand = AccessTools.Method(typeof(RoleBelieverCountPatch), nameof(RoleBelieverCountPatch.ColonistBelieverCountForCurrentFaction));
-
-            yield return inst;
         }
     }
 }
@@ -713,28 +718,9 @@ static class RecalculateThoughtStateFactionContextPatch
     }
 }
 
-[HarmonyPatch(typeof(Thought_IdeoMissingBuilding), "CurrentStateInternal")]
-static class ThoughtIdeoMissingBuildingPatch
-{
-    private static MethodInfo colonistBelieverCountCached = AccessTools.PropertyGetter(typeof(Ideo), nameof(Ideo.ColonistBelieverCountCached));
-
-    static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> insts)
-    {
-        foreach (var inst in insts)
-        {
-            if (inst.operand as MethodInfo == colonistBelieverCountCached)
-                inst.operand = AccessTools.Method(typeof(RoleBelieverCountPatch), nameof(RoleBelieverCountPatch.ColonistBelieverCountForCurrentFaction));
-
-            yield return inst;
-        }
-    }
-}
-
 [HarmonyPatch(typeof(SocialCardUtility), nameof(SocialCardUtility.DrawPawnRoleSelection))]
 static class DrawPawnRoleSelectionPatch
 {
-    private static MethodInfo colonistBelieverCountCached = AccessTools.PropertyGetter(typeof(Ideo), nameof(Ideo.ColonistBelieverCountCached));
-
     static void Prefix(Pawn pawn)
     {
         if (Multiplayer.Client == null) return;
@@ -747,17 +733,6 @@ static class DrawPawnRoleSelectionPatch
         if (Multiplayer.Client == null) return;
 
         FactionContext.Pop();
-    }
-
-    static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> insts)
-    {
-        foreach (var inst in insts)
-        {
-            if (inst.operand as MethodInfo == colonistBelieverCountCached)
-                inst.operand = AccessTools.Method(typeof(RoleBelieverCountPatch), nameof(RoleBelieverCountPatch.ColonistBelieverCountForCurrentFaction));
-
-            yield return inst;
-        }
     }
 }
 
