@@ -1,0 +1,128 @@
+// Minimal headless substitutes: tests compile the production faction model,
+// SetFaction method and tick patch without loading Unity or RimWorld.
+using System;
+using System.Collections.Generic;
+using Multiplayer.Client;
+
+namespace Verse
+{
+    public interface IExposable { void ExposeData(); }
+    public enum LoadSaveMode { Inactive, Saving, LoadingVars }
+    public static class Scribe { public static LoadSaveMode mode; }
+    public static class Scribe_Values
+    {
+        public static void Look(ref int value, string name) { }
+    }
+    public static class Scribe_Deep
+    {
+        public static Dictionary<string, object> values = new();
+        public static void Look<T>(ref T value, string name) where T : class
+        {
+            if (Scribe.mode == LoadSaveMode.Saving) values[name] = value;
+            if (Scribe.mode == LoadSaveMode.LoadingVars)
+                value = values.TryGetValue(name, out var saved) ? (T)saved : null;
+        }
+    }
+    public class LetterStack
+    {
+        public readonly List<string> letters = new();
+        public readonly List<string> queued = new();
+        public Action onTick;
+        public int ticks;
+        public void LetterStackTick()
+        {
+            if (!global::Multiplayer.Client.Patches.TickFactionLetterStacks.Prefix()) return;
+            ticks++;
+            onTick?.Invoke();
+            letters.AddRange(queued);
+            queued.Clear();
+        }
+    }
+    public class Game
+    {
+        public RimWorld.ResearchManager researchManager;
+        public RimWorld.DrugPolicyDatabase drugPolicyDatabase;
+        public RimWorld.OutfitDatabase outfitDatabase;
+        public RimWorld.FoodRestrictionDatabase foodRestrictionDatabase;
+        public RimWorld.PlaySettings playSettings;
+        public LetterStack letterStack;
+        public RimWorld.History history;
+        public RimWorld.Storyteller storyteller;
+        public RimWorld.StoryWatcher storyWatcher;
+    }
+    public static class Current { public static Game Game = new(); }
+    public static class Find
+    {
+        public static RimWorld.ResearchManager ResearchManager => Current.Game.researchManager;
+        public static LetterStack LetterStack => Current.Game.letterStack;
+        public static RimWorld.History History => Current.Game.history;
+        public static RimWorld.Storyteller Storyteller => Current.Game.storyteller;
+        public static RimWorld.StoryWatcher StoryWatcher => Current.Game.storyWatcher;
+        public static RimWorld.FactionManager FactionManager = new();
+        public static UniqueIDsManager UniqueIDsManager = new();
+    }
+    public class UniqueIDsManager
+    {
+        public int GetNextThingID() => 1;
+    }
+}
+
+namespace RimWorld
+{
+    public class Faction
+    {
+        public int loadID;
+        public static Faction OfPlayer;
+    }
+    public class FactionManager
+    {
+        public readonly Dictionary<int, Faction> factions = new();
+        public Faction GetById(int id) => factions.GetValueOrDefault(id);
+    }
+    public class ResearchManager { }
+    public class DrugPolicy { public int id; }
+    public class ApparelPolicy { public int id; }
+    public class FoodPolicy { public int id; }
+    public class DrugPolicyDatabase { public List<DrugPolicy> policies = new(); }
+    public class OutfitDatabase { public List<ApparelPolicy> outfits = new(); }
+    public class FoodRestrictionDatabase { public List<FoodPolicy> foodRestrictions = new(); }
+    public class PlaySettings { }
+    public class History { }
+    public class StoryWatcher { }
+    public class Storyteller
+    {
+        public object def, difficultyDef, difficulty;
+        public Storyteller(object def, object difficultyDef, object difficulty) { }
+    }
+}
+
+namespace Multiplayer.Client
+{
+    public static class Multiplayer
+    {
+        public static object Client = new();
+        public static GameComp GameComp = new();
+        public static MultiplayerWorldComp WorldComp = new();
+    }
+    public class GameComp { public bool multifaction = true; }
+}
+
+namespace Multiplayer.Client.Factions
+{
+    public static class FactionExtensions
+    {
+        static Stack<RimWorld.Faction> stack = new();
+        public static void PushFaction(object map, RimWorld.Faction faction)
+        {
+            stack.Push(RimWorld.Faction.OfPlayer);
+            RimWorld.Faction.OfPlayer = faction;
+            Multiplayer.WorldComp.SetFaction(faction);
+        }
+        public static void PopFaction()
+        {
+            var previous = stack.Pop();
+            RimWorld.Faction.OfPlayer = previous;
+            Multiplayer.WorldComp.SetFaction(previous);
+        }
+    }
+}

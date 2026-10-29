@@ -161,6 +161,7 @@ public class MultiplayerWorldComp : IHasSessionData
         game.foodRestrictionDatabase = data.foodRestrictionDatabase;
         game.playSettings = data.playSettings;
 
+        game.letterStack = data.letterStack;
         game.history = data.history;
         game.storyteller = data.storyteller;
         game.storyWatcher = data.storyWatcher;

@@ -24,6 +24,13 @@
     </ItemGroup>
 
     <ItemGroup>
+      <EmbeddedResource Include="..\Client\Comp\World\FactionWorldData.cs" LogicalName="FactionWorldData.cs" />
+      <EmbeddedResource Include="..\Client\Comp\World\MultiplayerWorldComp.cs" LogicalName="MultiplayerWorldComp.cs" />
+      <EmbeddedResource Include="..\Client\Factions\FactionLetterStack.cs" LogicalName="FactionLetterStack.cs" />
+      <EmbeddedResource Include="Helper\FactionLetterStubs.txt" LogicalName="FactionLetterStubs.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
       <ProjectReference Include="..\ChatCommandContracts\ChatCommandContracts.csproj" />
       <ProjectReference Include="..\Common\Common.csproj" />
       <ProjectReference Include="..\SourceGen\SourceGen.csproj" ReferenceOutputAssembly="true" />

@@ -13,6 +13,7 @@ public class FactionWorldData : IExposable
     public FoodRestrictionDatabase foodRestrictionDatabase;
     public PlaySettings playSettings;
 
+    public LetterStack letterStack;
     public History history;
     public Storyteller storyteller;
     public StoryWatcher storyWatcher;
@@ -29,6 +30,7 @@ public class FactionWorldData : IExposable
         Scribe_Deep.Look(ref foodRestrictionDatabase, "foodRestrictionDatabase");
         Scribe_Deep.Look(ref playSettings, "playSettings");
 
+        Scribe_Deep.Look(ref letterStack, "letterStack");
         Scribe_Deep.Look(ref history, "history");
         Scribe_Deep.Look(ref storyteller, "storyteller");
         Scribe_Deep.Look(ref storyWatcher, "storyWatcher");
@@ -41,6 +43,8 @@ public class FactionWorldData : IExposable
             foodRestrictionDatabase ??= new FoodRestrictionDatabase();
             playSettings ??= new PlaySettings();
 
+            // Older saves only have a stack for the faction saved in Game's small components.
+            letterStack ??= new LetterStack();
             history ??= new History();
             storyteller ??= new Storyteller(Find.Storyteller.def, Find.Storyteller.difficultyDef,
                 Find.Storyteller.difficulty);
@@ -72,6 +76,7 @@ public class FactionWorldData : IExposable
             foodRestrictionDatabase = new FoodRestrictionDatabase(),
             playSettings = new PlaySettings(),
 
+            letterStack = new LetterStack(),
             history = new History(),
             storyteller = new Storyteller(Find.Storyteller.def, Find.Storyteller.difficultyDef, Find.Storyteller.difficulty),
             storyWatcher = new StoryWatcher()
@@ -90,6 +95,7 @@ public class FactionWorldData : IExposable
             foodRestrictionDatabase = Current.Game.foodRestrictionDatabase,
             playSettings = Current.Game.playSettings,
 
+            letterStack = Find.LetterStack,
             history = Find.History,
             storyteller = Find.Storyteller,
             storyWatcher = Find.StoryWatcher
