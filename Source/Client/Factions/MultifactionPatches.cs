@@ -472,24 +472,25 @@ static class RecacheColonistBelieverCountPatch
         foreach (var inst in insts)
         {
             if (inst.operand as MethodInfo == allColonists)
-                inst.operand = AccessTools.Method(typeof(RecacheColonistBelieverCountPatch), nameof(ColonistsAllPlayerFactions));
+                inst.operand = AccessTools.Method(typeof(RecacheColonistBelieverCountPatch), nameof(ColonistsCurrentPlayerFaction));
             yield return inst;
         }
     }
 
-    private static List<Pawn> colonistsAllFactions = new();
+    private static List<Pawn> colonistsCurrentFaction = new();
 
-    private static List<Pawn> ColonistsAllPlayerFactions()
+    private static List<Pawn> ColonistsCurrentPlayerFaction()
     {
-        colonistsAllFactions.Clear();
+        colonistsCurrentFaction.Clear();
+        Faction faction = Faction.OfPlayer;
 
         foreach (var p in PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive)
         {
-            if (IsColonistAnyFaction(p) && p.HostFaction == null && !p.InCryptosleep)
-                colonistsAllFactions.Add(p);
+            if (p.Faction == faction && IsColonistAnyFaction(p) && p.HostFaction == null && !p.InCryptosleep)
+                colonistsCurrentFaction.Add(p);
         }
 
-        return colonistsAllFactions;
+        return colonistsCurrentFaction;
     }
 
     // Note: IsColonist is patched above to compare to Faction.OfPlayer
@@ -594,6 +595,207 @@ static class ValidatePawnPatch
     public static bool IsFreeNonSlaveColonistAnyFaction(Pawn p)
     {
         return p.Faction is { IsPlayer: true } && p.RaceProps.Humanlike && p.HostFaction == null && !p.IsSlave;
+    }
+}
+
+static class RoleBelieverCountPatch
+{
+    [HarmonyPatch(typeof(Ideo), nameof(Ideo.ColonistBelieverCountCached), MethodType.Getter)]
+    static class ColonistBelieverCountCachedPatch
+    {
+        static bool Prefix(Ideo __instance, ref int __result)
+        {
+            if (Multiplayer.Client == null || Multiplayer.game?.gameComp?.multifaction != true)
+                return true;
+
+            __result = ColonistBelieverCountForCurrentFaction(__instance);
+            return false;
+        }
+    }
+
+    public static int ColonistBelieverCountForCurrentFaction(Ideo ideo)
+    {
+        if (Multiplayer.Client == null || Multiplayer.game?.gameComp?.multifaction != true)
+            return ideo.ColonistBelieverCountCached;
+
+        return ColonistBelieverCountForFaction(ideo, Faction.OfPlayer);
+    }
+
+    // Vanilla caches the count and only recomputes it in Ideo.RecacheColonistBelieverCount.
+    // Counting on every read scans every pawn of every map each tick for each role.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Ideo, Dictionary<Faction, int>> countCache = new();
+
+    [HarmonyPatch(typeof(Ideo), nameof(Ideo.RecacheColonistBelieverCount))]
+    static class ClearCountCache
+    {
+        static void Postfix(Ideo __instance)
+        {
+            if (countCache.TryGetValue(__instance, out var counts))
+                counts.Clear();
+        }
+    }
+
+    public static int ColonistBelieverCountForFaction(Ideo ideo, Faction faction)
+    {
+        if (faction == null)
+            return 0;
+
+        // Only cache from the simulation so every client caches the same values.
+        bool sim = Multiplayer.Ticking || Multiplayer.ExecutingCmds;
+        if (sim && countCache.TryGetValue(ideo, out var cached) && cached.TryGetValue(faction, out int cachedCount))
+            return cachedCount;
+
+        int count = CountColonistBelievers(ideo, faction);
+        if (sim)
+            countCache.GetOrCreateValue(ideo)[faction] = count;
+        return count;
+    }
+
+    private static int CountColonistBelievers(Ideo ideo, Faction faction)
+    {
+        int count = 0;
+
+        // The FreeColonists finder uses IsColonist, which is patched to depend on
+        // the current faction. Here the requested faction may be a different one.
+        foreach (var p in PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive)
+        {
+            if (p.Faction == faction && RecacheColonistBelieverCountPatch.IsColonistAnyFaction(p)
+                && p.HostFaction == null && !p.InCryptosleep
+                && p.Ideo == ideo && !p.IsSlave && !p.IsQuestLodger())
+                count++;
+        }
+
+        return count;
+    }
+}
+
+[HarmonyPatch(typeof(Precept_Role), nameof(Precept_Role.Active), MethodType.Getter)]
+static class RoleActivePatch
+{
+    static bool Prefix(Precept_Role __instance, ref bool __result)
+    {
+        if (Multiplayer.Client == null || Multiplayer.game?.gameComp?.multifaction != true || __instance is not Precept_RoleSingle roleSingle)
+            return true;
+
+        if (DebugSettings.activateAllIdeoRoles)
+        {
+            __result = true;
+            return false;
+        }
+
+        Faction faction = roleSingle.ChosenPawnSingle()?.Faction ?? Faction.OfPlayer;
+        int count = RoleBelieverCountPatch.ColonistBelieverCountForFaction(__instance.ideo, faction);
+        __result = ActiveForBelieverCount(__instance.active, __instance.def, count);
+        return false;
+    }
+
+    // Match RecacheActivity's hysteresis and leader exception rather than using
+    // the activation threshold for both activation and deactivation.
+    internal static bool ActiveForBelieverCount(bool active, PreceptDef def, int count)
+    {
+        if (active && def.deactivationBelieverCount >= 0 && count <= def.deactivationBelieverCount && !def.leaderRole)
+            active = false;
+        if (!active && def.activationBelieverCount >= 0 && (count >= def.activationBelieverCount || def.leaderRole))
+            active = true;
+        return active;
+    }
+}
+
+[HarmonyPatch(typeof(Precept_RoleSingle), nameof(Precept_RoleSingle.RecacheActivity))]
+static class RecacheRoleActivityFactionContextPatch
+{
+    [HarmonyPriority(MpPriority.MpFirst)]
+    static void Prefix(Precept_RoleSingle __instance, out bool __state)
+    {
+        __state = false;
+        if (Multiplayer.Client == null || Multiplayer.game?.gameComp?.multifaction != true) return;
+
+        // A shared ideology may be recached while another faction is current.
+        // Do not unassign its role holder using that other faction's population.
+        FactionContext.Push(__instance.ChosenPawnSingle()?.Faction ?? Faction.OfPlayer);
+        __state = true;
+    }
+
+    static void Finalizer(bool __state)
+    {
+        if (__state) FactionContext.Pop();
+    }
+}
+
+[HarmonyPatch(typeof(Ideo), nameof(Ideo.ObligationsActive), MethodType.Getter)]
+static class IdeoObligationsEnabledPatch
+{
+    private static FieldInfo colonistBelieverCountCached = AccessTools.Field(typeof(Ideo), "colonistBelieverCountCached");
+
+    static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> insts)
+    {
+        foreach (var inst in insts)
+        {
+            if (inst.opcode == OpCodes.Ldfld && inst.operand as FieldInfo == colonistBelieverCountCached)
+            {
+                // Mutate in place to retain branch labels and exception blocks.
+                inst.opcode = OpCodes.Call;
+                inst.operand = AccessTools.Method(typeof(RoleBelieverCountPatch), nameof(RoleBelieverCountPatch.ColonistBelieverCountForCurrentFaction));
+            }
+            yield return inst;
+        }
+    }
+}
+
+[HarmonyPatch(typeof(SituationalThoughtHandler), nameof(SituationalThoughtHandler.UpdateAllMoodThoughts))]
+static class UpdateAllMoodThoughtsFactionContextPatch
+{
+    [HarmonyPriority(MpPriority.MpFirst)]
+    static void Prefix(SituationalThoughtHandler __instance, out bool __state)
+    {
+        __state = false;
+        if (Multiplayer.Client == null || Multiplayer.game?.gameComp?.multifaction != true) return;
+
+        FactionContext.Push(__instance.pawn?.Faction);
+        __state = true;
+    }
+
+    static void Finalizer(bool __state)
+    {
+        if (__state) FactionContext.Pop();
+    }
+}
+
+[HarmonyPatch(typeof(Thought_Situational), nameof(Thought_Situational.RecalculateState))]
+static class RecalculateThoughtStateFactionContextPatch
+{
+    [HarmonyPriority(MpPriority.MpFirst)]
+    static void Prefix(Thought_Situational __instance, out bool __state)
+    {
+        __state = false;
+        if (Multiplayer.Client == null || Multiplayer.game?.gameComp?.multifaction != true) return;
+
+        FactionContext.Push(__instance.pawn?.Faction);
+        __state = true;
+    }
+
+    static void Finalizer(bool __state)
+    {
+        if (__state) FactionContext.Pop();
+    }
+}
+
+[HarmonyPatch(typeof(SocialCardUtility), nameof(SocialCardUtility.DrawPawnRoleSelection))]
+static class DrawPawnRoleSelectionPatch
+{
+    [HarmonyPriority(MpPriority.MpFirst)]
+    static void Prefix(Pawn pawn, out bool __state)
+    {
+        __state = false;
+        if (Multiplayer.Client == null || Multiplayer.game?.gameComp?.multifaction != true) return;
+
+        FactionContext.Push(pawn?.Faction);
+        __state = true;
+    }
+
+    static void Finalizer(bool __state)
+    {
+        if (__state) FactionContext.Pop();
     }
 }
 
