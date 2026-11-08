@@ -288,6 +288,8 @@ namespace Multiplayer.Client
         [MpPrefix(typeof(MainTabWindow_Quests), nameof(MainTabWindow_Quests.DoDismissButton))]
         static void MainTabWindow_Quests__DoDismissButtonPatch(Quest ___selected)
         {
+            // Multifaction: dismissing is per faction, see QuestDismissPerFaction
+            if (Multiplayer.Client != null && Multiplayer.GameComp.multifaction) return;
             SyncQuestDismissed.Watch(___selected);
         }
 
