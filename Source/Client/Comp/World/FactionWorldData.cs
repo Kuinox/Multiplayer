@@ -20,6 +20,7 @@ public class FactionWorldData : IExposable
 
     // Ids of the quests given while this faction was the current one (its storyteller, its commands)
     public HashSet<int> givenQuests = new();
+    public HashSet<int> dismissedQuests = new();
 
     public FactionWorldData() { }
 
@@ -37,6 +38,7 @@ public class FactionWorldData : IExposable
         Scribe_Deep.Look(ref storyteller, "storyteller");
         Scribe_Deep.Look(ref storyWatcher, "storyWatcher");
         Scribe_Collections.Look(ref givenQuests, "givenQuests", LookMode.Value);
+        Scribe_Collections.Look(ref dismissedQuests, "dismissedQuests", LookMode.Value);
 
         if (Scribe.mode == LoadSaveMode.LoadingVars)
         {
@@ -51,6 +53,7 @@ public class FactionWorldData : IExposable
                 Find.Storyteller.difficulty);
             storyWatcher ??= new StoryWatcher();
             givenQuests ??= new HashSet<int>();
+            dismissedQuests ??= new HashSet<int>();
         }
     }
 
