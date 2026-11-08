@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using RimWorld;
 using Verse;
 
@@ -17,6 +18,8 @@ public class FactionWorldData : IExposable
     public Storyteller storyteller;
     public StoryWatcher storyWatcher;
 
+    public HashSet<int> dismissedQuests = new();
+
     public FactionWorldData() { }
 
     public void ExposeData()
@@ -32,6 +35,7 @@ public class FactionWorldData : IExposable
         Scribe_Deep.Look(ref history, "history");
         Scribe_Deep.Look(ref storyteller, "storyteller");
         Scribe_Deep.Look(ref storyWatcher, "storyWatcher");
+        Scribe_Collections.Look(ref dismissedQuests, "dismissedQuests", LookMode.Value);
 
         if (Scribe.mode == LoadSaveMode.LoadingVars)
         {
@@ -45,6 +49,7 @@ public class FactionWorldData : IExposable
             storyteller ??= new Storyteller(Find.Storyteller.def, Find.Storyteller.difficultyDef,
                 Find.Storyteller.difficulty);
             storyWatcher ??= new StoryWatcher();
+            dismissedQuests ??= new HashSet<int>();
         }
     }
 
