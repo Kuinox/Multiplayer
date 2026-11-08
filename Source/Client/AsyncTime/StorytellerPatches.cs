@@ -66,11 +66,29 @@ public class QuestPartsListForReadingPatch
             __result = __result.Where(questPart => {
                 if (questPart is QuestPart_ThreatsGenerator questPartThreatsGenerator)
                 {
-                    return questPartThreatsGenerator.mapParent?.Map == Multiplayer.MapContext;
+                    var map = questPartThreatsGenerator.mapParent?.Map;
+                    return map == Multiplayer.MapContext && IsThreatStoryteller(map);
                 }
                 return true;
             }).ToList();
         }
+    }
+
+    // In multifaction every player faction's storyteller ticks on every map,
+    // only let one of them fire the map's quest threats (otherwise they fire once per faction)
+    static bool IsThreatStoryteller(Map map)
+    {
+        if (map == null || Multiplayer.Client == null || !Multiplayer.GameComp.multifaction)
+            return true;
+
+        var owner = map.ParentFaction is { IsPlayer: true } f && f != Multiplayer.WorldComp.spectatorFaction
+            ? f
+            : Multiplayer.WorldComp.factionData.Keys
+                .Where(id => id != Multiplayer.WorldComp.spectatorFaction.loadID)
+                .Select(id => Find.FactionManager.GetById(id))
+                .FirstOrDefault(fac => fac != null);
+
+        return Faction.OfPlayer == owner;
     }
 }
 
