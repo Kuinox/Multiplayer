@@ -1,6 +1,6 @@
 name: Build fork release
 
-# One GitHub release per commit on dev, tagged build-<hash>. The in-game AutoUpdater downloads:
+# One GitHub release per commit on master, tagged build-<hash>. The in-game AutoUpdater downloads:
 #   releases/latest/download/version.txt          -> hash of the newest build (hosts update to it at startup)
 #   releases/download/build-<hash>/Multiplayer.zip -> exact build a host runs (joining clients follow it)
 
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - dev
+      - master
     paths-ignore:
       - 'README.md'
 
