@@ -170,6 +170,7 @@ public class PacketTest
         yield return ClientChatPacket.Create("ABC123!@#");
 
         yield return new ClientProtocolPacket(50);
+        yield return new ClientProtocolPacket(50, "abc1234");
 
         yield return new ServerProtocolOkPacket(true, true) { autosaveInterval = 5f, autosaveUnit = AutosaveUnit.Minutes };
         yield return new ServerProtocolOkPacket(false, false);

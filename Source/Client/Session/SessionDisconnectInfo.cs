@@ -2,6 +2,7 @@ using System;
 using LiteNetLib;
 using Multiplayer.Common;
 using Multiplayer.Common.Networking.Packet;
+using Multiplayer.Client.Util;
 using Verse;
 
 namespace Multiplayer.Client;
@@ -36,7 +37,17 @@ public struct SessionDisconnectInfo
             disconnectInfo.descTranslated =
                 "MpWrongMultiplayerVersionDesc".Translate(strVersion, proto, MpVersion.Version, MpVersion.Protocol);
 
-            if (proto < MpVersion.Protocol)
+            var serverHash = MpVersion.HashFromVersion(strVersion);
+            var session = Multiplayer.session;
+            if (AutoUpdater.CanUpdate && MpVersion.IsReleaseHash(serverHash) && !AutoUpdater.IsRunning(serverHash!)
+                && session?.connector != null)
+            {
+                disconnectInfo.descTranslated += $"\nThe host runs build {serverHash}. It can be downloaded automatically; the game will restart and rejoin.";
+                disconnectInfo.specialButtonTranslated = $"Update to {serverHash} & rejoin";
+                var connector = session.connector;
+                disconnectInfo.specialButtonAction = () => AutoUpdater.UpdateToAndReconnect(serverHash!, connector);
+            }
+            else if (proto < MpVersion.Protocol)
                 disconnectInfo.descTranslated += "\n" + "MpWrongVersionUpdateInfoHost".Translate();
             else
                 disconnectInfo.descTranslated += "\n" + "MpWrongVersionUpdateInfo".Translate();

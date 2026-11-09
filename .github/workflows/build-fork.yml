@@ -1,0 +1,92 @@
+name: Build fork release
+
+# One GitHub release per commit on master, tagged build-<hash>. The in-game AutoUpdater downloads:
+#   releases/latest/download/version.txt          -> hash of the newest build (hosts update to it at startup)
+#   releases/download/build-<hash>/Multiplayer.zip -> exact build a host runs (joining clients follow it)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - 'README.md'
+
+concurrency:
+  group: build-fork
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  SLN_PATH: Source/
+  KEEP_BUILDS: 30
+
+jobs:
+  build:
+    if: github.repository != 'rwmt/Multiplayer'
+    name: Build and release
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - uses: actions/setup-dotnet@v4
+      with:
+        global-json-file: global.json
+
+    - name: Compute build hash
+      id: hash
+      # Must match MSBuildGitHash's command, which is what MpVersion.GitHash reports in-game.
+      run: |
+        HASH=$(git describe --long --always --dirty --exclude='*' --abbrev=7)
+        echo "Build hash: $HASH"
+        if [[ ! "$HASH" =~ ^[0-9a-f]{7,40}$ ]]; then echo "Unexpected hash '$HASH'"; exit 1; fi
+        echo "hash=$HASH" >> "$GITHUB_OUTPUT"
+
+    - run: dotnet restore ${{ env.SLN_PATH }}
+
+    - run: dotnet build ${{ env.SLN_PATH }} --configuration Release --no-restore
+
+    - run: dotnet test ${{ env.SLN_PATH }} --configuration Release --no-build
+
+    - name: Check built hash
+      run: |
+        # The tree must still be clean after build/test, otherwise the DLL reports a -dirty hash and can't auto-update.
+        git status --porcelain
+        test -z "$(git status --porcelain --ignore-submodules)"
+
+    - name: Package
+      run: |
+        HASH=${{ steps.hash.outputs.hash }}
+        sed -i "s/<name>\(.*\)<\/name>\$/<name>\1 [${HASH}]<\/name>/" About/About.xml
+        mkdir -p output/Multiplayer
+        cp -r About/ Assemblies/ AssembliesCustom/ Defs/ Languages/ Textures/ output/Multiplayer
+        rm -rf output/Multiplayer/Languages/.git
+        echo "${{ github.repository }}" > output/Multiplayer/AutoUpdate.txt
+        (cd output && zip -qr ../Multiplayer.zip Multiplayer/)
+        echo "$HASH" > version.txt
+
+    - name: Publish release
+      run: |
+        HASH=${{ steps.hash.outputs.hash }}
+        TAG="build-$HASH"
+        gh release delete "$TAG" --cleanup-tag --yes 2>/dev/null || true
+        gh release create "$TAG" Multiplayer.zip version.txt \
+          --target "${{ github.sha }}" \
+          --title "Build $HASH" \
+          --notes "Automatic build of ${{ github.sha }}. Extract Multiplayer.zip into RimWorld/Mods; it updates itself afterwards." \
+          --latest
+
+    - name: Prune old builds
+      run: |
+        gh release list --limit 200 --json tagName,createdAt \
+          --jq "[.[] | select(.tagName | startswith(\"build-\"))] | sort_by(.createdAt) | reverse | .[${KEEP_BUILDS}:] | .[].tagName" |
+        while read -r tag; do
+          echo "Deleting $tag"
+          gh release delete "$tag" --cleanup-tag --yes
+        done

@@ -145,7 +145,7 @@ namespace Multiplayer.Client
             });
 
             MultiplayerData.modCtorRoundMode = RoundMode.GetCurrentRoundMode();
-            VersionChecker.Init();
+            AutoUpdater.Init();
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]

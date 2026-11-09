@@ -56,7 +56,7 @@ namespace Multiplayer.Client
                             else
                             {
                                 Find.WindowStack.Add(new ServerBrowser());
-                                VersionChecker.OpenNewVersionDialogIfApplicable();
+                                AutoUpdater.RemindIfPendingRestart();
                             }
                         }));
                 }
@@ -67,7 +67,11 @@ namespace Multiplayer.Client
                 if (Multiplayer.session == null)
                     optList.Insert(0, new ListableOption(
                         "MpHostServer".Translate(),
-                        () => Find.WindowStack.Add(new HostWindow() { layer = WindowLayer.Super })
+                        () =>
+                        {
+                            Find.WindowStack.Add(new HostWindow() { layer = WindowLayer.Super });
+                            AutoUpdater.RemindIfPendingRestart();
+                        }
                     ));
 
                 if (MpVersion.IsDebug && Multiplayer.IsReplay)

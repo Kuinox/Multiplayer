@@ -19,14 +19,18 @@ public record struct ServerProtocolOkPacket(bool hasPassword, bool isStandaloneS
 
 
 [PacketDefinition(Packets.Client_Protocol)]
-public record struct ClientProtocolPacket(int protocolVersion) : IPacket
+public record struct ClientProtocolPacket(int protocolVersion, string? gitHash = null) : IPacket
 {
     public int protocolVersion = protocolVersion;
+    // Optional trailing field: older clients don't send it, so it's only read when data remains.
+    public string? gitHash = gitHash;
 
-    public static ClientProtocolPacket Current() => new(MpVersion.Protocol);
+    public static ClientProtocolPacket Current() => new(MpVersion.Protocol, MpVersion.GitHash);
 
     public void Bind(PacketBuffer buf)
     {
         buf.Bind(ref protocolVersion);
+        if (buf.isWriting ? gitHash != null : buf.DataRemaining)
+            buf.Bind(ref gitHash!);
     }
 }
