@@ -42,7 +42,7 @@ public class ServerJoiningState : AsyncConnectionState
 
     private void HandleProtocol(ClientProtocolPacket packet)
     {
-        if (packet.protocolVersion != MpVersion.Protocol)
+        if (packet.protocolVersion != MpVersion.Protocol || !BuildMatches(packet.gitHash))
             Player.Disconnect(MpDisconnectReason.Protocol, ByteWriter.GetBytes(MpVersion.Version, MpVersion.Protocol));
         else
         {
@@ -59,6 +59,17 @@ public class ServerJoiningState : AsyncConnectionState
                 connection.Send(new ServerBootstrapPacket(true, settingsMissing, saveMissing));
             }
         }
+    }
+
+    // When the host runs a clean (CI) build, clients must run the exact same commit. Clients that don't send a hash
+    // (older builds) are rejected too. Local dev builds (dirty hash) on either side only need the protocol to match.
+    private static bool BuildMatches(string? clientHash) => BuildMatches(MpVersion.GitHash, clientHash);
+
+    public static bool BuildMatches(string? serverHash, string? clientHash)
+    {
+        if (!MpVersion.IsReleaseHash(serverHash)) return true;
+        if (clientHash != null && !MpVersion.IsReleaseHash(clientHash)) return true;
+        return string.Equals(clientHash, serverHash, StringComparison.OrdinalIgnoreCase);
     }
 
     private void HandleUsername(ClientUsernamePacket packet)
