@@ -56,9 +56,9 @@ jobs:
 
     - name: Check built hash
       run: |
-        # The tree must still be clean after build/test, otherwise the DLL reports a -dirty hash and can't auto-update.
-        git status --porcelain
-        test -z "$(git status --porcelain --ignore-submodules)"
+        # Tracked files must be unchanged (what git describe --dirty checks), otherwise the DLL reports a -dirty hash and can't auto-update.
+        git status --porcelain --untracked-files=no --ignore-submodules
+        test -z "$(git status --porcelain --untracked-files=no --ignore-submodules)"
 
     - name: Package
       run: |
