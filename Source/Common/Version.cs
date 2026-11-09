@@ -22,6 +22,18 @@ namespace Multiplayer.Common
         public static bool IsReleaseHash(string? hash) =>
             hash != null && System.Text.RegularExpressions.Regex.IsMatch(hash, "^[0-9a-fA-F]{7,40}$");
 
+        /// git prints abbreviated hashes longer than 7 chars when 7 would be ambiguous in that clone, so builds of the
+        /// same commit can report "abc1234" or "abc1234f". Compare on the common prefix.
+        public static bool SameBuild(string? a, string? b)
+        {
+            if (a == null || b == null) return false;
+            var len = System.Math.Min(a.Length, b.Length);
+            return len >= 7 && string.Compare(a, 0, b, 0, len, System.StringComparison.OrdinalIgnoreCase) == 0;
+        }
+
+        /// Release tags always use the 7 char prefix.
+        public static string ShortHash(string hash) => hash.Substring(0, System.Math.Min(7, hash.Length));
+
         /// Extracts the git hash from a version string like "0.11.5+abc1234".
         public static string? HashFromVersion(string? version)
         {

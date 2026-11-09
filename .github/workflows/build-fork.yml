@@ -74,11 +74,11 @@ jobs:
     - name: Publish release
       run: |
         HASH=${{ steps.hash.outputs.hash }}
-        TAG="build-$HASH"
+        TAG="build-${HASH:0:7}"
         gh release delete "$TAG" --cleanup-tag --yes 2>/dev/null || true
         gh release create "$TAG" Multiplayer.zip version.txt \
           --target "${{ github.sha }}" \
-          --title "Build $HASH" \
+          --title "Build ${HASH:0:7}" \
           --notes "Automatic build of ${{ github.sha }}. Extract Multiplayer.zip into RimWorld/Mods; it updates itself afterwards." \
           --latest
 

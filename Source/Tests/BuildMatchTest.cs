@@ -7,6 +7,8 @@ public class BuildMatchTest
     [TestCase("abc1234", "abc1234", true)]
     [TestCase("abc1234", "ABC1234", true)]
     [TestCase("abc1234", "def5678", false)]
+    [TestCase("abc1234", "abc1234f", true)]          // same commit, longer abbreviation in a bigger clone
+    [TestCase("abc1234e", "abc1234f", false)]
     [TestCase("abc1234", null, false)]               // pre-autoupdate client sends no hash
     [TestCase("abc1234", "def5678-dirty", true)]     // local dev client: protocol check only
     [TestCase("abc1234-dirty", "def5678", true)]     // local dev host: protocol check only

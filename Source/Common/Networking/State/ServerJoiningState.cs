@@ -69,7 +69,7 @@ public class ServerJoiningState : AsyncConnectionState
     {
         if (!MpVersion.IsReleaseHash(serverHash)) return true;
         if (clientHash != null && !MpVersion.IsReleaseHash(clientHash)) return true;
-        return string.Equals(clientHash, serverHash, StringComparison.OrdinalIgnoreCase);
+        return MpVersion.SameBuild(clientHash, serverHash);
     }
 
     private void HandleUsername(ClientUsernamePacket packet)

@@ -18,7 +18,12 @@ namespace Multiplayer.Client.Util;
 ///
 /// CI publishes one GitHub release per commit, tagged <c>build-&lt;hash&gt;</c>, containing <c>Multiplayer.zip</c> and
 /// <c>version.txt</c> (the hash). The newest one is marked "latest". The zip contains an <c>AutoUpdate.txt</c> marker
-/// holding the GitHub repository ("owner/name"); installs without it (Steam, local dev symlinks) never self-update.
+/// holding the GitHub repository ("owner/name").
+///
+/// Git checkouts (the mod folder is a clone of the fork, built locally) are updated too, but only when it's lossless:
+/// on branch master, no local changes to tracked files, and HEAD already pushed to the fork's master. Then the
+/// checkout is reset to the wanted commit and the CI-built DLLs are dropped into the (git-ignored) Assemblies folders,
+/// so no local build is needed. Anything else (feature branches, unpushed commits, dirty trees) is left alone.
 ///
 /// Two flows:
 /// - At startup: update to the latest build, then offer a restart. This keeps hosts on the newest version.
@@ -30,6 +35,9 @@ namespace Multiplayer.Client.Util;
 public static class AutoUpdater
 {
     private const string MarkerFile = "AutoUpdate.txt";
+    // Where git checkouts get their builds from.
+    private const string GitCheckoutRepository = "Kuinox/Multiplayer";
+    private static readonly string[] BuildOutputDirs = ["Assemblies", "AssembliesCustom"];
     private const string AsideSuffix = ".mp-old";
     private static readonly string[] ManagedDirs = ["About", "Assemblies", "AssembliesCustom", "Defs", "Languages", "Textures"];
     private static readonly Regex HashRegex = new("^[0-9a-fA-F]{7,40}$");
@@ -42,15 +50,18 @@ public static class AutoUpdater
 
     private static bool busy;
 
-    public static string? Repository
+    public static bool IsGitCheckout =>
+        Directory.Exists(Path.Combine(RootDir, ".git")) || File.Exists(Path.Combine(RootDir, ".git"));
+
+    public static string? Repository => IsGitCheckout ? GitCheckoutRepository : ZipInstallRepository;
+
+    public static string? ZipInstallRepository
     {
         get
         {
             try
             {
-                // Never touch a git checkout, even if someone copied the marker into it.
-                if (Directory.Exists(Path.Combine(RootDir, ".git")) || File.Exists(Path.Combine(RootDir, ".git")))
-                    return null;
+                if (IsGitCheckout) return null;
                 var path = Path.Combine(RootDir, MarkerFile);
                 if (!File.Exists(path)) return null;
                 var repo = File.ReadAllText(path).Trim();
@@ -65,8 +76,7 @@ public static class AutoUpdater
 
     public static bool CanUpdate => Repository != null && MpVersion.IsReleaseHash(MpVersion.GitHash);
 
-    public static bool IsRunning(string hash) =>
-        string.Equals(hash, MpVersion.GitHash, StringComparison.OrdinalIgnoreCase);
+    public static bool IsRunning(string hash) => MpVersion.SameBuild(hash, MpVersion.GitHash);
 
     public static void Init()
     {
@@ -91,6 +101,10 @@ public static class AutoUpdater
                     "Later",
                     null,
                     "Multiplayer updated")));
+            }
+            catch (NotEligibleException e)
+            {
+                Log.Message($"[Multiplayer] Not auto-updating: {e.Message}");
             }
             catch (Exception e)
             {
@@ -121,7 +135,7 @@ public static class AutoUpdater
         {
             try
             {
-                if (InstalledPendingRestart == null || !string.Equals(InstalledPendingRestart, hash, StringComparison.OrdinalIgnoreCase))
+                if (InstalledPendingRestart == null || !MpVersion.SameBuild(InstalledPendingRestart, hash))
                     DownloadAndInstall(hash).GetAwaiter().GetResult();
 
                 OnMainThread.Enqueue(() =>
@@ -136,6 +150,8 @@ public static class AutoUpdater
                 Log.Error($"[Multiplayer] Updating to build {hash} failed: {e}");
                 var msg = e is BuildNotFoundException
                     ? $"Build {hash} is not available for download (too old, or built locally by the host). The host should restart their game to update to the latest build."
+                    : e is NotEligibleException
+                    ? $"Can't update automatically to build {hash}: {e.Message}"
                     : $"Updating to build {hash} failed:\n{e.Message}\n\nSee the log for details.";
                 OnMainThread.Enqueue(() => Find.WindowStack.Add(new Dialog_MessageBox(msg)));
             }
@@ -143,6 +159,7 @@ public static class AutoUpdater
     }
 
     private class BuildNotFoundException(string msg) : Exception(msg);
+    private class NotEligibleException(string msg) : Exception(msg);
 
     private static IRestClient GitHubClient() =>
         new RestClient("https://github.com/") { FollowRedirects = true, Timeout = 120_000 }
@@ -167,20 +184,29 @@ public static class AutoUpdater
         if (!HashRegex.IsMatch(hash)) throw new ArgumentException($"Invalid build hash '{hash}'");
         var repo = Repository ?? throw new InvalidOperationException("This install doesn't support auto-update");
 
-        var resp = await GitHubClient().ExecuteAsync(new RestRequest($"{repo}/releases/download/build-{hash}/Multiplayer.zip"));
+        var resp = await GitHubClient().ExecuteAsync(new RestRequest($"{repo}/releases/download/build-{MpVersion.ShortHash(hash)}/Multiplayer.zip"));
         if (resp.StatusCode == HttpStatusCode.NotFound)
             throw new BuildNotFoundException($"Release build-{hash} not found in {repo}");
         if (resp.StatusCode != HttpStatusCode.OK || resp.RawBytes == null || resp.RawBytes.Length == 0)
             throw new Exception($"Download failed: {(int)resp.StatusCode} {resp.StatusCode} {resp.ErrorMessage}");
 
-        Install(resp.RawBytes, repo);
+        if (IsGitCheckout)
+        {
+            GitResetTo(hash, repo);
+            Install(resp.RawBytes, repo, BuildOutputDirs, topLevelFiles: false);
+        }
+        else
+        {
+            Install(resp.RawBytes, repo, ManagedDirs, topLevelFiles: true);
+        }
+
         InstalledPendingRestart = hash;
         Log.Message($"[Multiplayer] Installed build {hash}, restart required");
     }
 
     /// Replaces the mod's files with the zip's "Multiplayer/..." content. Files that are in use (Windows locks loaded
     /// DLLs) are renamed aside and deleted on the next start.
-    private static void Install(byte[] zipBytes, string expectedRepo)
+    private static void Install(byte[] zipBytes, string expectedRepo, string[] dirs, bool topLevelFiles)
     {
         var root = Path.GetFullPath(RootDir);
         var files = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
@@ -212,7 +238,14 @@ public static class AutoUpdater
         if (!files.Keys.Any(f => f.EndsWith("Multiplayer.dll", StringComparison.OrdinalIgnoreCase)))
             throw new Exception("Update zip doesn't contain Multiplayer.dll");
 
-        foreach (var kv in files)
+        bool Managed(string path)
+        {
+            var rel = path.Substring(root.Length + 1);
+            var sep = rel.IndexOfAny(['/', '\\']);
+            return sep < 0 ? topLevelFiles : dirs.Contains(rel.Substring(0, sep), StringComparer.OrdinalIgnoreCase);
+        }
+
+        foreach (var kv in files.Where(kv => Managed(kv.Key)))
         {
             var dest = kv.Key;
             var content = kv.Value;
@@ -222,7 +255,7 @@ public static class AutoUpdater
         }
 
         // Remove files the new build no longer has (e.g. a removed Def or DLL would otherwise still load).
-        foreach (var dir in ManagedDirs)
+        foreach (var dir in dirs)
         {
             var full = Path.Combine(root, dir);
             if (!Directory.Exists(full)) continue;
@@ -232,6 +265,71 @@ public static class AutoUpdater
                 try { File.Delete(file); }
                 catch (Exception) { MoveAside(file); }
             }
+        }
+    }
+
+    /// Resets a git checkout to the given commit of the fork's master, refusing whenever local work could be lost.
+    private static void GitResetTo(string hash, string repo)
+    {
+        var branch = Git("rev-parse --abbrev-ref HEAD");
+        if (branch != "master")
+            throw new NotEligibleException($"the mod's git checkout is on '{branch}', not master");
+        if (Git("status --porcelain --untracked-files=no --ignore-submodules") != "")
+            throw new NotEligibleException("the mod's git checkout has local changes");
+
+        Git($"fetch --quiet https://github.com/{repo}.git master");
+        if (!GitSucceeds("merge-base --is-ancestor HEAD FETCH_HEAD"))
+            throw new NotEligibleException($"the mod's git checkout has commits that aren't on {repo} master");
+        if (!GitSucceeds($"merge-base --is-ancestor {hash} FETCH_HEAD"))
+            throw new NotEligibleException($"build {hash} isn't on {repo} master");
+
+        Git($"reset --hard --quiet {hash}");
+        try { Git("submodule update --init --quiet"); }
+        catch (Exception e) { Log.Warning($"[Multiplayer] git submodule update failed (translations may be outdated): {e.Message}"); }
+        Log.Message($"[Multiplayer] Reset git checkout to {hash}");
+    }
+
+    private static string Git(string args)
+    {
+        var (code, output) = RunGit(args);
+        if (code != 0) throw new Exception($"git {args} failed ({code}): {output}");
+        return output;
+    }
+
+    private static bool GitSucceeds(string args) => RunGit(args).code == 0;
+
+    private static (int code, string output) RunGit(string args)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo("git", args)
+        {
+            WorkingDirectory = RootDir,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        psi.EnvironmentVariables["GIT_TERMINAL_PROMPT"] = "0";
+
+        System.Diagnostics.Process proc;
+        try
+        {
+            proc = System.Diagnostics.Process.Start(psi)!;
+        }
+        catch (Exception e)
+        {
+            throw new NotEligibleException($"couldn't run git ({e.Message}). Is git installed and on PATH?");
+        }
+
+        using (proc)
+        {
+            var stderr = proc.StandardError.ReadToEndAsync();
+            var stdout = proc.StandardOutput.ReadToEnd();
+            if (!proc.WaitForExit(120_000))
+            {
+                try { proc.Kill(); } catch { /* already gone */ }
+                throw new Exception($"git {args} timed out");
+            }
+            return (proc.ExitCode, (stdout + stderr.Result).Trim());
         }
     }
 
