@@ -39,6 +39,13 @@ static class QuestOwnership
                 return owner;
         }
 
+        // Not tied to a base (world sites, trade requests...): the faction whose storyteller (or command) gave it
+        if (Multiplayer.WorldComp != null)
+            foreach (var data in Multiplayer.WorldComp.factionData.Values)
+                if (data.givenQuests.Contains(quest.id) && Find.FactionManager.GetById(data.factionId) is { } giver &&
+                    giver != Multiplayer.WorldComp.spectatorFaction)
+                    return giver;
+
         return quest.TryGetPlayerFaction(out var faction) && faction.IsPlayer ? faction : null;
     }
 
@@ -55,6 +62,30 @@ static class QuestOwnership
         {
             if (__result != null && Active && BelongsToOther(__instance.quest, Multiplayer.RealPlayerFaction))
                 __result = null;
+        }
+    }
+
+    // "Quest expires in x hours" for the offers of other players
+    [HarmonyPatch(typeof(Alert_QuestExpiresSoon), "QuestExpiring", MethodType.Getter)]
+    static class HideOtherPlayersExpiringQuests
+    {
+        static bool Prefix(ref Quest ___questExpiring, ref Quest __result)
+        {
+            if (!Active) return true;
+
+            Quest expiring = null;
+            foreach (var quest in Find.QuestManager.questsInDisplayOrder)
+            {
+                if (!quest.dismissed && !quest.Historical && !quest.initiallyAccepted &&
+                    quest.State == QuestState.NotYetAccepted && quest.TicksUntilExpiry > 0 &&
+                    quest.TicksUntilExpiry < Alert_QuestExpiresSoon.TicksToAlert &&
+                    (expiring == null || quest.TicksUntilExpiry < expiring.TicksUntilExpiry) &&
+                    !BelongsToOther(quest, Multiplayer.RealPlayerFaction))
+                    expiring = quest;
+            }
+
+            __result = ___questExpiring = expiring;
+            return false;
         }
     }
 

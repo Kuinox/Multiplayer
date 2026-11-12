@@ -25,8 +25,8 @@ public static class MainTabWindow_QuestsDoRowPatch
     {
         if (Multiplayer.Client != null && !Multiplayer.settings.hideOtherPlayersQuests)
         {
-            Faction playerFaction;
-            if (quest.TryGetPlayerFaction(out playerFaction))
+            // Same owner as the one allowed to accept it
+            if (QuestOwnership.Owner(quest) is { } playerFaction)
             {
                 Rect iconRect = new Rect(rect.x + 2f, rect.y + 2f, 4f, rect.height - 4f);
                 Widgets.DrawBoxSolid(iconRect, playerFaction.Color);
@@ -48,8 +48,7 @@ public static class MainTabWindow_QuestsShouldListNowPatch
     {
         if (Multiplayer.Client != null && Multiplayer.settings.hideOtherPlayersQuests)
         {
-            Faction playerFaction;
-            if (quest.TryGetPlayerFaction(out playerFaction) && playerFaction != Faction.OfPlayer)
+            if (QuestOwnership.Owner(quest) is { } playerFaction && playerFaction != Faction.OfPlayer)
             {
                 __result = false;
                 return false;
