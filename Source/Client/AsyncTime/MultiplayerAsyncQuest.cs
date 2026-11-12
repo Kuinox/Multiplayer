@@ -92,10 +92,10 @@ namespace Multiplayer.Client.Comp
             if (!Multiplayer.GameComp.asyncTime) return;
 
             __state = MultiplayerAsyncQuest.TryGetCachedQuestMap(__instance);
-            __state?.PreContext();
+            __state = MultiplayerAsyncQuest.EnterContext(__state);
         }
 
-        static void Postfix(AsyncTimeComp __state) => __state?.PostContext();
+        static void Finalizer(AsyncTimeComp __state) => __state?.PostContext();
     }
 
     [HarmonyPatch(typeof(Quest), nameof(Quest.Accept))]
@@ -109,10 +109,10 @@ namespace Multiplayer.Client.Comp
             if (__instance.State != QuestState.NotYetAccepted || !Multiplayer.GameComp.asyncTime || __instance.parts == null) return;
 
             __state = MultiplayerAsyncQuest.CacheQuest(__instance);
-            __state?.PreContext();
+            __state = MultiplayerAsyncQuest.EnterContext(__state);
         }
 
-        static void Postfix(AsyncTimeComp __state) => __state?.PostContext();
+        static void Finalizer(AsyncTimeComp __state) => __state?.PostContext();
     }
 
     [HarmonyPatch(typeof(Quest), nameof(Quest.End))]
@@ -127,6 +127,18 @@ namespace Multiplayer.Client.Comp
 
     public static class MultiplayerAsyncQuest
     {
+        // Quests of a map tick inside its context (and are accepted in it when the command is on that map).
+        // Entering it again overwrote AsyncTimeComp.prevTime with the map's time: leaving the outer context then
+        // "restored" the map's clock as the world's. Finished quests read TicksSinceCleanup every tick of their map,
+        // so the world clock became the clock of whichever map ticked last, years behind for a recent colony.
+        // Returns the comp whose context was entered, to leave in a finalizer.
+        public static AsyncTimeComp EnterContext(AsyncTimeComp comp)
+        {
+            if (comp == null || Multiplayer.MapContext == comp.map) return null;
+            comp.PreContext();
+            return comp;
+        }
+
         //Probably should move this to a class so its not a Dictionary of Lists
         private static readonly Dictionary<AsyncTimeComp, List<Quest>> mapQuestsCache = new Dictionary<AsyncTimeComp, List<Quest>>();
         private static readonly List<Quest> worldQuestsCache = new List<Quest>();
