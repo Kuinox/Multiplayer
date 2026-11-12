@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Multiplayer.Client.Factions;
 using RimWorld;
 using Verse;
@@ -22,6 +23,13 @@ public class FactionMapData : IExposable
     public ResourceCounter resourceCounter;
     public ListerFilthInHomeArea listerFilthInHomeArea;
     public ListerMergeables listerMergeables;
+
+    // ListerHaulables picks the slot group to recheck with static indices, shared by every instance.
+    // With one lister per faction, they all advanced it in lockstep: with N factions on a map, a faction only ever
+    // rechecked the slot groups at its offset modulo N (e.g. 5 factions and 5 stockpiles: only the first stockpile),
+    // so things becoming invalid in place (rotting, low hit points) were never hauled out of the others.
+    private int haulablesGroupCycleIndex;
+    private readonly List<int> haulablesCellCycleIndices = new();
 
     private FactionMapData() { }
 
@@ -66,6 +74,19 @@ public class FactionMapData : IExposable
         }
 
         ExposeActor.OnPostInit(() => map.PopFaction());
+    }
+
+    public void ListerHaulablesTick()
+    {
+        ListerHaulables.groupCycleIndex = haulablesGroupCycleIndex;
+        ListerHaulables.cellCycleIndices.Clear();
+        ListerHaulables.cellCycleIndices.AddRange(haulablesCellCycleIndices);
+
+        listerHaulables.ListerHaulablesTick();
+
+        haulablesGroupCycleIndex = ListerHaulables.groupCycleIndex;
+        haulablesCellCycleIndices.Clear();
+        haulablesCellCycleIndices.AddRange(ListerHaulables.cellCycleIndices);
     }
 
     public static FactionMapData New(int factionId, Map map)
