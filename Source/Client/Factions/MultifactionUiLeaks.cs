@@ -152,3 +152,24 @@ static class HideOtherFactionAlertCulprits
     static bool Other(Pawn p) => Other((Thing)p);
     static bool Other(GlobalTargetInfo t) => t.IsValid && MultifactionUiLeaks.IsOtherPlayer(MultifactionUiLeaks.OwnerFaction(t));
 }
+
+// Those alerts list their pawns in the tooltip from their own list, not from the report filtered above,
+// and they count prisoners of every player faction (Pawn.IsPrisonerOfColony checks Faction.IsPlayer).
+// So another player's prisoner in a coma was listed under your medical emergency.
+[HarmonyPatch]
+static class HideOtherFactionAlertPawns
+{
+    static IEnumerable<MethodBase> TargetMethods()
+    {
+        yield return AccessTools.PropertyGetter(typeof(Alert_LifeThreateningHediff), "SickPawns");
+        yield return AccessTools.PropertyGetter(typeof(Alert_AwaitingMedicalOperation), "AwaitingMedicalOperation");
+        yield return AccessTools.PropertyGetter(typeof(Alert_CubeWithdrawal), "Withdrawal");
+    }
+
+    // The lists are the alerts' own result lists
+    static void Postfix(List<Pawn> __result)
+    {
+        if (MultifactionUiLeaks.Active)
+            __result?.RemoveAll(p => MultifactionUiLeaks.IsOtherPlayer(MultifactionUiLeaks.OwnerFaction(p)));
+    }
+}
