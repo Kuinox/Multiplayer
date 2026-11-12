@@ -162,10 +162,41 @@ namespace Multiplayer.Client
         static bool Prefix() =>
             FactionRepeater.Template(
                 Multiplayer.game?.worldComp.factionData,
-                d => d.storyteller.StorytellerTick(),
+                d =>
+                {
+                    if (StorytellerRunsForCurrentFaction())
+                        d.storyteller.StorytellerTick();
+                },
                 null,
                 ref ignore
             );
+
+        // Every map tick (and the world tick) ticked the storyteller of every player faction, targeting the ticked map.
+        // So other players' storytellers gave quests and incidents on your base while you played (and yours on theirs),
+        // each base got one storyteller's worth per player faction, and defeated factions kept getting quests.
+        // Faction.OfPlayer is the faction being repeated.
+        static bool StorytellerRunsForCurrentFaction()
+        {
+            if (!Multiplayer.GameComp.multifaction)
+                return true;
+
+            var faction = Faction.OfPlayer;
+
+            // Map tick: the map's owner, and factions with colonists on it (e.g. a caravan visiting a site)
+            if (Multiplayer.MapContext is { } map)
+                return map.ParentFaction == faction || map.mapPawns.AnyColonistSpawned;
+
+            // World tick: factions which still have a colonist somewhere
+            foreach (var m in Find.Maps)
+                if (m.mapPawns.AnyColonistSpawned)
+                    return true;
+
+            foreach (var caravan in Find.WorldObjects.Caravans)
+                if (caravan.Faction == faction && caravan.PawnsListForReading.Any(p => p.IsColonist))
+                    return true;
+
+            return false;
+        }
     }
 
     [HarmonyPatch(typeof(StoryWatcher), nameof(StoryWatcher.StoryWatcherTick))]
