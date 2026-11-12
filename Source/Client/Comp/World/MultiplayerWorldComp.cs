@@ -105,6 +105,11 @@ public class MultiplayerWorldComp : IHasSessionData
             savedFactionData.Remove(currentFactionId);
 
             Scribe_Custom.LookValueDeep(ref savedFactionData, "factionData");
+
+            // The current faction's data is rebuilt from the game's managers on load, keep what only we track
+            var current = factionData[currentFactionId];
+            Scribe_Collections.Look(ref current.givenQuests, "currentGivenQuests", LookMode.Value);
+            Scribe_Collections.Look(ref current.dismissedQuests, "currentDismissedQuests", LookMode.Value);
         }
         else
         {
@@ -113,6 +118,9 @@ public class MultiplayerWorldComp : IHasSessionData
 
             Scribe_Custom.LookValueDeep(ref factionData, "factionData");
             factionData ??= new SortedDictionary<int, FactionWorldData>();
+
+            Scribe_Collections.Look(ref currentGivenQuests, "currentGivenQuests", LookMode.Value);
+            Scribe_Collections.Look(ref currentDismissedQuests, "currentDismissedQuests", LookMode.Value);
         }
 
         if (Scribe.mode == LoadSaveMode.LoadingVars && Multiplayer.session != null && Multiplayer.game != null)
@@ -124,9 +132,16 @@ public class MultiplayerWorldComp : IHasSessionData
         if (Scribe.mode == LoadSaveMode.LoadingVars)
         {
             // Game manager order?
-            factionData[currentFactionId] = FactionWorldData.FromCurrent(currentFactionId);
+            var current = factionData[currentFactionId] = FactionWorldData.FromCurrent(currentFactionId);
+            current.givenQuests = currentGivenQuests ?? new HashSet<int>();
+            current.dismissedQuests = currentDismissedQuests ?? new HashSet<int>();
+            currentGivenQuests = null;
+            currentDismissedQuests = null;
         }
     }
+
+    private HashSet<int> currentGivenQuests;
+    private HashSet<int> currentDismissedQuests;
 
     public void WriteSessionData(ByteWriter writer)
     {
