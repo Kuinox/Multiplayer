@@ -180,3 +180,36 @@ static class FixMultifactionPocketMapDefaultThreatPointsNow
         return Multiplayer.Client == null || target is not Map { IsPocketMap: true } || Find.AnyPlayerHomeMap != null;
     }
 }
+
+// Quests are given by the storyteller on the world tick (GiveQuest targets the World), but for one player's colony.
+// Their points (DaysPassedSinceSettle factor) and the quests allowed (rootEarliestDay) used the world clock, which is far
+// ahead of colonies settled later: a 20 days old colony got the threat points and quests of a 300 days old one.
+// Evaluate them on the colony's clock. Only these computations: incident execution and refire checks stay on the
+// world clock, the World's StoryState is shared by every faction.
+[HarmonyPatch]
+static class HomeMapTimeForWorldThreatPoints
+{
+    static IEnumerable<MethodBase> TargetMethods()
+    {
+        yield return AccessTools.Method(typeof(StorytellerUtility), nameof(StorytellerUtility.DefaultParmsNow));
+        yield return AccessTools.Method(typeof(NaturalRandomQuestChooser), nameof(NaturalRandomQuestChooser.ChooseNaturalRandomQuest));
+    }
+
+    static void Prefix(IIncidentTarget target, ref TimeSnapshot? __state)
+    {
+        if (Multiplayer.Client == null || !Multiplayer.GameComp.asyncTime) return;
+        if (!AsyncWorldTimeComp.tickingWorld || AsyncTimeComp.tickingMap != null) return;
+        if (target is not (World or Caravan)) return;
+
+        // Faction.OfPlayer is the faction whose storyteller is ticking
+        var faction = Faction.OfPlayer;
+        foreach (var map in Find.Maps)
+            if (map.ParentFaction == faction)
+            {
+                __state = TimeSnapshot.GetAndSetFromMap(map);
+                return;
+            }
+    }
+
+    static void Finalizer(TimeSnapshot? __state) => __state?.Set();
+}
