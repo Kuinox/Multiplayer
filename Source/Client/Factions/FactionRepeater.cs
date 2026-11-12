@@ -176,10 +176,36 @@ namespace Multiplayer.Client
         static bool Prefix() =>
             FactionRepeater.Template(
                 Multiplayer.game?.worldComp.factionData,
-                d => d.storyWatcher.StoryWatcherTick(),
+                d =>
+                {
+                    if (TicksOnCurrentClock())
+                        d.storyWatcher.StoryWatcherTick();
+                },
                 null,
                 ref ignore
             );
+
+        // The story watcher counts time with Find.TickManager.TicksGame (adaptation grows every half day of it).
+        // It was ticked on every map's clock and on the world clock, so adaptation grew once per running clock:
+        // a faction whose map isn't played reached the maximum, and the 30 days settle grace was skipped (world clock).
+        // Tick it on a single clock: its first home map's, or the world's when it has no base.
+        // Faction.OfPlayer is the faction being repeated.
+        static bool TicksOnCurrentClock()
+        {
+            var faction = Faction.OfPlayer;
+            Map home = null;
+            foreach (var m in Find.Maps)
+                if (m.ParentFaction == faction)
+                {
+                    home = m;
+                    break;
+                }
+
+            if (Multiplayer.MapContext is { } map)
+                return map == home;
+
+            return home == null;
+        }
     }
 
     [HarmonyPatch(typeof(ResearchManager), nameof(ResearchManager.Notify_MonolithLevelChanged))]
