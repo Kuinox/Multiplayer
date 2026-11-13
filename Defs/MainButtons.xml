@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<Defs>
+
+  <MainButtonDef>
+    <defName>MpBios</defName>
+    <label>bios</label>
+    <description>Summary of every colonist's backstory, traits and skills.</description>
+    <workerClass>MainButtonWorker_ToggleTab</workerClass>
+    <tabWindowClass>Multiplayer.Client.MainTabWindow_Bios</tabWindowClass>
+    <order>95</order>
+    <validWithoutMap>true</validWithoutMap>
+  </MainButtonDef>
+
+</Defs>
