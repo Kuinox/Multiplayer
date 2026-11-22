@@ -56,6 +56,15 @@ public class SaveableDesyncInfo(
 
             try
             {
+                zip.AddEntry("local_pawn_state.txt", DesyncStateDump.PawnState());
+            }
+            catch (Exception e)
+            {
+                zip.AddEntry("local_pawn_state.txt", $"Failed: {e}");
+            }
+
+            try
+            {
                 replay.Wait();
             }
             catch (AggregateException e)
@@ -118,6 +127,8 @@ public class SaveableDesyncInfo(
             .AppendLine($"Multiplayer Debug Build - Client|||{MpVersion.IsDebug}")
             .AppendLine($"Multiplayer Debug Mode - Host|||{Multiplayer.GameComp.debugMode}")
             .AppendLine($"Rimworld Developer Mode - Client|||{Prefs.DevMode}")
+            .AppendLine("\n###Debug Settings - Client###")
+            .Append(DesyncStateDump.DebugSettingsSection())
             .AppendLine("\n###Server Info###")
             .AppendLine($"Player Count|||{Multiplayer.session.players.Count}")
             .AppendLine($"Async time active|||{Multiplayer.GameComp.asyncTime}")
