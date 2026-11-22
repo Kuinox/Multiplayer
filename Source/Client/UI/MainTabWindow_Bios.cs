@@ -1,215 +1,178 @@
 using System.Collections.Generic;
 using System.Linq;
 using RimWorld;
-using RimWorld.Planet;
 using UnityEngine;
 using Verse;
 
 namespace Multiplayer.Client
 {
-    // Read-only overview of every free colonist's bio: backstories, traits, incapabilities and skills.
-    // Purely local UI, nothing here touches simulation state.
-    public class MainTabWindow_Bios : MainTabWindow
+    // Read-only table of every free colonist's bio, one pawn per row: backstories, traits,
+    // incapabilities and skills. Purely local UI, nothing here touches simulation state.
+    public class MainTabWindow_Bios : MainTabWindow_PawnTable
     {
-        private const float RowHeight = 140f;
-        private const float PortraitWidth = 100f;
-        private const float BioColWidth = 290f;
-        private const float TraitColWidth = 250f;
-        private const float Gap = 10f;
+        private static PawnTableDef tableDef;
 
-        private Vector2 scroll;
+        public override PawnTableDef PawnTableDef => tableDef ??= BuildTableDef();
 
-        public override Vector2 RequestedTabSize => new(1100f, Mathf.Min(UI.screenHeight - 35f, 820f));
+        public override IEnumerable<Pawn> Pawns =>
+            PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive_FreeColonists.Where(p => p.story != null);
 
-        private static List<Pawn> Pawns =>
-            PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive_FreeColonists
-                .Where(p => p.story != null)
-                .OrderBy(p => p.LabelShort)
-                .ToList();
-
-        public override void DoWindowContents(Rect inRect)
+        // Skill columns are generated so modded skills show up too
+        private static PawnTableDef BuildTableDef()
         {
-            var pawns = Pawns;
+            var def = DefDatabase<PawnTableDef>.GetNamed("MpBios");
+            int insertAt = def.columns.FindIndex(c => c.defName == "RemainingSpace");
+            if (insertAt < 0) insertAt = def.columns.Count;
 
-            Text.Font = GameFont.Medium;
-            Widgets.Label(new Rect(inRect.x, inRect.y, inRect.width, 35f), $"Colonist bios ({pawns.Count})");
+            var skillColumns = DefDatabase<SkillDef>.AllDefsListForReading
+                .OrderByDescending(s => s.listOrder)
+                .Select(s => new PawnColumnDef
+                {
+                    defName = "MpBios_Skill_" + s.defName,
+                    label = s.skillLabel,
+                    headerTip = s.LabelCap + "\n\n" + s.description,
+                    workerClass = typeof(PawnColumnWorker_BioSkill),
+                    sortable = true,
+                    width = 52,
+                });
+
+            def.columns.InsertRange(insertAt, skillColumns);
+            return def;
+        }
+    }
+
+    public abstract class PawnColumnWorker_BioText : PawnColumnWorker_Text
+    {
+        protected virtual Color TextColor => Color.white;
+
+        public override void DoCell(Rect rect, Pawn pawn, PawnTable table)
+        {
+            string text = GetTextFor(pawn);
+            if (text.NullOrEmpty()) return;
+
+            var cell = new Rect(rect.x, rect.y, rect.width - 4f, Mathf.Min(rect.height, 30f));
             Text.Font = GameFont.Small;
-
-            var outRect = new Rect(inRect.x, inRect.y + 40f, inRect.width, inRect.height - 40f);
-            var viewRect = new Rect(0f, 0f, outRect.width - 16f, pawns.Count * RowHeight);
-
-            Widgets.BeginScrollView(outRect, ref scroll, viewRect);
-            for (int i = 0; i < pawns.Count; i++)
-            {
-                var row = new Rect(0f, i * RowHeight, viewRect.width, RowHeight);
-                if (row.yMax < scroll.y || row.y > scroll.y + outRect.height) continue;
-
-                if (i % 2 == 1) Widgets.DrawLightHighlight(row);
-                DrawPawnRow(row.ContractedBy(4f), pawns[i]);
-            }
-            Widgets.EndScrollView();
-
+            Text.Anchor = Anchor;
+            GUI.color = TextColor;
+            Widgets.Label(cell, text.Truncate(cell.width));
+            GUI.color = Color.white;
             Text.Anchor = TextAnchor.UpperLeft;
-            Text.Font = GameFont.Small;
-            GUI.color = Color.white;
-        }
 
-        private static void DrawPawnRow(Rect rect, Pawn pawn)
-        {
-            float x = rect.x;
-
-            // Portrait, click to jump to the pawn
-            var portraitRect = new Rect(x, rect.y, PortraitWidth, rect.height);
-            GUI.DrawTexture(portraitRect, PortraitsCache.Get(pawn, new Vector2(PortraitWidth, rect.height), Rot4.South, cameraZoom: 1.2f));
-            Widgets.DrawHighlightIfMouseover(portraitRect);
-            TooltipHandler.TipRegion(portraitRect, "Click to jump to " + pawn.LabelShort);
-            if (Widgets.ButtonInvisible(portraitRect))
+            if (Mouse.IsOver(cell))
             {
-                CameraJumper.TryJumpAndSelect(pawn);
-                Find.MainTabsRoot.EscapeCurrentTab();
-            }
-            x += PortraitWidth + Gap;
-
-            DrawBioColumn(new Rect(x, rect.y, BioColWidth, rect.height), pawn);
-            x += BioColWidth + Gap;
-
-            DrawTraitColumn(new Rect(x, rect.y, TraitColWidth, rect.height), pawn);
-            x += TraitColWidth + Gap;
-
-            DrawSkillColumn(new Rect(x, rect.y, rect.xMax - x, rect.height), pawn);
-        }
-
-        private static void DrawBioColumn(Rect rect, Pawn pawn)
-        {
-            float y = rect.y;
-
-            Text.Font = GameFont.Medium;
-            Widgets.Label(new Rect(rect.x, y, rect.width, 32f), pawn.Name?.ToStringShort ?? pawn.LabelShort);
-            Text.Font = GameFont.Small;
-            y += 30f;
-
-            var sub = new List<string>();
-            if (pawn.story.TitleCap is { Length: > 0 } title) sub.Add(title);
-            sub.Add($"{pawn.gender.GetLabel(pawn.AnimalOrWildMan()).CapitalizeFirst()}, age {pawn.ageTracker.AgeBiologicalYears}");
-            if (ModsConfig.BiotechActive && pawn.genes?.XenotypeLabelCap is { Length: > 0 } xeno) sub.Add(xeno);
-            if (pawn.Faction != null && pawn.Faction != Faction.OfPlayer) sub.Add(pawn.Faction.Name);
-
-            GUI.color = ColoredText.SubtleGrayColor;
-            Widgets.Label(new Rect(rect.x, y, rect.width, 22f), string.Join(" · ", sub).Truncate(rect.width));
-            GUI.color = Color.white;
-            y += 26f;
-
-            DrawBackstory(new Rect(rect.x, y, rect.width, 22f), "Childhood", pawn.story.Childhood, pawn);
-            y += 24f;
-            DrawBackstory(new Rect(rect.x, y, rect.width, 22f), "Adulthood", pawn.story.Adulthood, pawn);
-            y += 24f;
-
-            if (pawn.Ideo != null)
-            {
-                var ideoRect = new Rect(rect.x, y, rect.width, 22f);
-                Widgets.Label(ideoRect, $"<color=#999999>Ideoligion:</color> {pawn.Ideo.name}".Truncate(rect.width));
-                Widgets.DrawHighlightIfMouseover(ideoRect);
-                TooltipHandler.TipRegion(ideoRect, pawn.Ideo.description);
+                Widgets.DrawHighlight(cell);
+                string tip = GetTip(pawn);
+                if (!tip.NullOrEmpty())
+                    TooltipHandler.TipRegion(cell, tip);
             }
         }
+    }
 
-        private static void DrawBackstory(Rect rect, string label, BackstoryDef backstory, Pawn pawn)
+    public class PawnColumnWorker_BioAge : PawnColumnWorker_BioText
+    {
+        public override TextAnchor Anchor => TextAnchor.MiddleCenter;
+        public override string GetTextFor(Pawn pawn) => pawn.ageTracker.AgeBiologicalYears.ToString();
+        public override string GetTip(Pawn pawn) => pawn.ageTracker.AgeTooltipString;
+        public override int Compare(Pawn a, Pawn b) =>
+            a.ageTracker.AgeBiologicalTicks.CompareTo(b.ageTracker.AgeBiologicalTicks);
+    }
+
+    public abstract class PawnColumnWorker_BioBackstory : PawnColumnWorker_BioText
+    {
+        protected abstract BackstoryDef Get(Pawn pawn);
+        public override string GetTextFor(Pawn pawn) => Get(pawn)?.TitleCapFor(pawn.gender);
+        public override string GetTip(Pawn pawn) => Get(pawn)?.FullDescriptionFor(pawn).Resolve();
+    }
+
+    public class PawnColumnWorker_BioChildhood : PawnColumnWorker_BioBackstory
+    {
+        protected override BackstoryDef Get(Pawn pawn) => pawn.story.Childhood;
+    }
+
+    public class PawnColumnWorker_BioAdulthood : PawnColumnWorker_BioBackstory
+    {
+        protected override BackstoryDef Get(Pawn pawn) => pawn.story.Adulthood;
+    }
+
+    public class PawnColumnWorker_BioTraits : PawnColumnWorker_BioText
+    {
+        private static IEnumerable<Trait> Traits(Pawn pawn) => pawn.story.traits.allTraits.Where(t => !t.Suppressed);
+
+        public override string GetTextFor(Pawn pawn) => Traits(pawn).Select(t => t.LabelCap).ToCommaList();
+
+        public override string GetTip(Pawn pawn) =>
+            Traits(pawn).Select(t => t.LabelCap.AsTipTitle() + "\n" + t.TipString(pawn)).ToLineList("\n");
+    }
+
+    public class PawnColumnWorker_BioIncapable : PawnColumnWorker_BioText
+    {
+        protected override Color TextColor => new(1f, 0.5f, 0.5f);
+
+        // Same source as the character card's "Incapable of" section: disabled work tags
+        // (Violent, Social, Caring...) from backstories, traits, genes, titles, roles, hediffs...
+        private static List<WorkTags> Disabled(Pawn pawn) =>
+            CharacterCardUtility.WorkTagsFrom(pawn.CombinedDisabledWorkTags).ToList();
+
+        public override string GetTextFor(Pawn pawn) =>
+            Disabled(pawn).Select(t => t.LabelTranslated().CapitalizeFirst()).ToCommaList();
+
+        public override string GetTip(Pawn pawn) =>
+            Disabled(pawn)
+                .Select(t => t.LabelTranslated().CapitalizeFirst().AsTipTitle() + "\n" +
+                             CharacterCardUtility.GetWorkTypeDisabledCausedBy(pawn, t) + "\n" +
+                             CharacterCardUtility.GetWorkTypesDisabledByWorkTag(t))
+                .ToLineList("\n");
+    }
+
+    // Skill level, plus a flame icon for passion
+    public class PawnColumnWorker_BioSkill : PawnColumnWorker
+    {
+        private SkillDef skill;
+        private SkillDef Skill => skill ??= DefDatabase<SkillDef>.GetNamed(def.defName.Substring("MpBios_Skill_".Length));
+
+        public override GameFont DefaultHeaderFont => GameFont.Tiny;
+        public override TextAnchor DefaultHeaderAlignment => TextAnchor.LowerCenter;
+
+        private SkillRecord Record(Pawn pawn) => pawn.skills?.GetSkill(Skill);
+
+        public override void DoCell(Rect rect, Pawn pawn, PawnTable table)
         {
-            if (backstory == null) return;
+            var record = Record(pawn);
+            if (record == null) return;
 
-            Widgets.Label(rect, $"<color=#999999>{label}:</color> {backstory.TitleCapFor(pawn.gender)}".Truncate(rect.width));
-            Widgets.DrawHighlightIfMouseover(rect);
-            TooltipHandler.TipRegion(rect, () => backstory.FullDescriptionFor(pawn).Resolve(), backstory.GetHashCode() ^ pawn.thingIDNumber);
-        }
+            var cell = new Rect(rect.x, rect.y, rect.width, Mathf.Min(rect.height, 30f));
+            bool disabled = record.TotallyDisabled;
 
-        private static void DrawTraitColumn(Rect rect, Pawn pawn)
-        {
-            GUI.color = ColoredText.SubtleGrayColor;
-            Widgets.Label(new Rect(rect.x, rect.y, rect.width, 22f), "Traits");
-            GUI.color = Color.white;
-
-            // Flowing trait chips
-            float x = rect.x, y = rect.y + 22f;
-            foreach (var trait in pawn.story.traits.allTraits)
-            {
-                if (trait.Suppressed) continue;
-
-                string label = trait.LabelCap;
-                float w = Text.CalcSize(label).x + 10f;
-                if (x + w > rect.xMax && x > rect.x)
-                {
-                    x = rect.x;
-                    y += 24f;
-                }
-
-                var chip = new Rect(x, y, w, 22f);
-                Widgets.DrawBoxSolid(chip, new Color(1f, 1f, 1f, 0.08f));
-                Widgets.DrawHighlightIfMouseover(chip);
-                Text.Anchor = TextAnchor.MiddleCenter;
-                Widgets.Label(chip, label);
-                Text.Anchor = TextAnchor.UpperLeft;
-                var t = trait;
-                TooltipHandler.TipRegion(chip, () => t.TipString(pawn), t.GetHashCode() ^ pawn.thingIDNumber);
-
-                x += w + 4f;
-            }
-            y += 30f;
-
-            var disabled = pawn.GetDisabledWorkTypes(permanentOnly: true);
-            if (disabled.Count == 0) return;
-
-            GUI.color = ColoredText.SubtleGrayColor;
-            Widgets.Label(new Rect(rect.x, y, rect.width, 22f), "Incapable of");
-            y += 22f;
-            GUI.color = new Color(1f, 0.5f, 0.5f);
-            var incapRect = new Rect(rect.x, y, rect.width, rect.yMax - y);
-            Text.Font = GameFont.Tiny;
-            Widgets.Label(incapRect, string.Join(", ", disabled.Select(w => w.labelShort.CapitalizeFirst())));
             Text.Font = GameFont.Small;
+            Text.Anchor = TextAnchor.MiddleRight;
+            GUI.color = disabled ? new Color(1f, 1f, 1f, 0.3f) : Color.white;
+            Widgets.Label(new Rect(cell.x, cell.y, cell.width / 2f + 4f, cell.height), disabled ? "-" : record.Level.ToString());
             GUI.color = Color.white;
-        }
+            Text.Anchor = TextAnchor.UpperLeft;
 
-        private static void DrawSkillColumn(Rect rect, Pawn pawn)
-        {
-            if (pawn.skills == null) return;
-
-            var skills = pawn.skills.skills;
-            int perCol = Mathf.CeilToInt(skills.Count / 2f);
-            float colWidth = rect.width / 2f;
-            float lineHeight = Mathf.Min(22f, rect.height / perCol);
-
-            Text.Font = GameFont.Tiny;
-            for (int i = 0; i < skills.Count; i++)
+            if (!disabled && record.passion != Passion.None)
             {
-                var skill = skills[i];
-                var line = new Rect(rect.x + (i / perCol) * colWidth, rect.y + (i % perCol) * lineHeight, colWidth - 6f, lineHeight);
-
-                if (skill.TotallyDisabled)
-                    GUI.color = new Color(1f, 1f, 1f, 0.3f);
-
-                // Level bar background
-                if (!skill.TotallyDisabled)
-                {
-                    var bar = line.ContractedBy(1f);
-                    bar.width *= skill.Level / (float)SkillRecord.MaxLevel;
-                    Widgets.DrawBoxSolid(bar, new Color(1f, 1f, 1f, 0.07f));
-                }
-
-                Text.Anchor = TextAnchor.MiddleLeft;
-                Widgets.Label(new Rect(line.x + 2f, line.y, line.width - 44f, line.height), skill.def.skillLabel.CapitalizeFirst());
-
-                if (skill.passion != Passion.None)
-                {
-                    var icon = skill.passion == Passion.Major ? SkillUI.PassionMajorIcon : SkillUI.PassionMinorIcon;
-                    GUI.DrawTexture(new Rect(line.xMax - 42f, line.y + (line.height - 16f) / 2f, 16f, 16f), icon);
-                }
-
-                Text.Anchor = TextAnchor.MiddleRight;
-                Widgets.Label(new Rect(line.xMax - 24f, line.y, 22f, line.height), skill.TotallyDisabled ? "-" : skill.Level.ToString());
-                Text.Anchor = TextAnchor.UpperLeft;
-                GUI.color = Color.white;
+                var icon = record.passion == Passion.Major ? SkillUI.PassionMajorIcon : SkillUI.PassionMinorIcon;
+                GUI.DrawTexture(new Rect(cell.center.x + 6f, cell.center.y - 8f, 16f, 16f), icon);
             }
-            Text.Font = GameFont.Small;
+
+            if (Mouse.IsOver(cell))
+            {
+                Widgets.DrawHighlight(cell);
+                TooltipHandler.TipRegion(cell, () => SkillUI.GetSkillDescription(record), record.GetHashCode());
+            }
         }
+
+        public override int GetMinWidth(PawnTable table) => Mathf.Max(base.GetMinWidth(table), def.width);
+        public override int GetMaxWidth(PawnTable table) => Mathf.Min(base.GetMaxWidth(table), GetMinWidth(table));
+
+        private int SortKey(Pawn pawn)
+        {
+            var record = Record(pawn);
+            if (record == null || record.TotallyDisabled) return -1;
+            return record.Level * 3 + (int)record.passion;
+        }
+
+        public override int Compare(Pawn a, Pawn b) => SortKey(a).CompareTo(SortKey(b));
     }
 }

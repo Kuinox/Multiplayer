@@ -5,11 +5,68 @@
   <MainButtonDef>
     <defName>MpBios</defName>
     <label>bios</label>
-    <description>Summary of every colonist's backstory, traits and skills.</description>
+    <description>Table of every colonist's backstory, traits and skills.</description>
     <workerClass>MainButtonWorker_ToggleTab</workerClass>
     <tabWindowClass>Multiplayer.Client.MainTabWindow_Bios</tabWindowClass>
     <order>95</order>
     <validWithoutMap>true</validWithoutMap>
   </MainButtonDef>
+
+  <PawnTableDef>
+    <defName>MpBios</defName>
+    <workerClass>PawnTable_PlayerPawns</workerClass>
+    <columns>
+      <li>LabelShortWithIcon</li>
+      <li>MpBios_Age</li>
+      <li MayRequire="Ludeon.RimWorld.Biotech">Xenotype</li>
+      <li>GapSmall</li>
+      <li>MpBios_Childhood</li>
+      <li>MpBios_Adulthood</li>
+      <li>GapSmall</li>
+      <li>MpBios_Traits</li>
+      <li>MpBios_Incapable</li>
+      <li>GapSmall</li>
+      <!-- one column per skill is inserted here by MainTabWindow_Bios -->
+      <li>RemainingSpace</li>
+    </columns>
+  </PawnTableDef>
+
+  <PawnColumnDef>
+    <defName>MpBios_Age</defName>
+    <label>age</label>
+    <workerClass>Multiplayer.Client.PawnColumnWorker_BioAge</workerClass>
+    <sortable>true</sortable>
+    <width>40</width>
+  </PawnColumnDef>
+
+  <PawnColumnDef>
+    <defName>MpBios_Childhood</defName>
+    <label>childhood</label>
+    <workerClass>Multiplayer.Client.PawnColumnWorker_BioChildhood</workerClass>
+    <sortable>true</sortable>
+    <width>150</width>
+  </PawnColumnDef>
+
+  <PawnColumnDef>
+    <defName>MpBios_Adulthood</defName>
+    <label>adulthood</label>
+    <workerClass>Multiplayer.Client.PawnColumnWorker_BioAdulthood</workerClass>
+    <sortable>true</sortable>
+    <width>150</width>
+  </PawnColumnDef>
+
+  <PawnColumnDef>
+    <defName>MpBios_Traits</defName>
+    <label>traits</label>
+    <workerClass>Multiplayer.Client.PawnColumnWorker_BioTraits</workerClass>
+    <width>260</width>
+  </PawnColumnDef>
+
+  <PawnColumnDef>
+    <defName>MpBios_Incapable</defName>
+    <label>incapable of</label>
+    <workerClass>Multiplayer.Client.PawnColumnWorker_BioIncapable</workerClass>
+    <width>170</width>
+  </PawnColumnDef>
 
 </Defs>
