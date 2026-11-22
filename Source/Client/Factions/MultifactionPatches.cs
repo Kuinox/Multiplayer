@@ -841,9 +841,16 @@ static class LetterStackReceiveOnlyMyFaction
     // todo the letter might get culled from the archive if it isn't in the stack and Sync depends on the archive
     static void Postfix(LetterStack __instance, Letter let)
     {
-        if (Multiplayer.RealPlayerFaction != Faction.OfPlayer)
+        if (!ShouldReceive())
             __instance.letters.Remove(let);
     }
+
+    // World ticks and maps without a player owner run in the spectator faction's context, so a spectator would
+    // otherwise see every letter generated there. Letters stay in the archive (which Sync reads from).
+    public static bool ShouldReceive() =>
+        Multiplayer.RealPlayerFaction == Faction.OfPlayer &&
+        !(Multiplayer.Client != null && Multiplayer.GameComp.multifaction &&
+          Multiplayer.RealPlayerFaction == Multiplayer.WorldComp.spectatorFaction);
 }
 
 [HarmonyPatch(typeof(LetterStack), nameof(LetterStack.ReceiveLetter), typeof(Letter), typeof(string), typeof(int), typeof(bool))]
@@ -867,7 +874,7 @@ static class LetterStackReceiveSoundOnlyMyFaction
 
     static void PlaySoundReplacement(SoundDef sound, Map map)
     {
-        if (Multiplayer.RealPlayerFaction == Faction.OfPlayer)
+        if (LetterStackReceiveOnlyMyFaction.ShouldReceive())
             sound.PlayOneShotOnCamera(map);
     }
 }

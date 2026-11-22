@@ -75,6 +75,10 @@ public static class Loader
         );
         Multiplayer.game.myFactionLoading = null;
 
+        // The save's letter stack belongs to whoever saved it; a spectator has no letters of their own
+        if (Multiplayer.GameComp.multifaction && Multiplayer.RealPlayerFaction == Multiplayer.WorldComp.spectatorFaction)
+            Find.LetterStack.letters.Clear();
+
         Multiplayer.AsyncWorldTime.cmds = new Queue<ScheduledCommand>(
             Multiplayer.session.dataSnapshot.MapCmds.GetValueSafe(ScheduledCommand.Global) ?? []);
         // Map cmds are added in MapAsyncTimeComp.FinalizeInit
