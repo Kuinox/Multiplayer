@@ -433,6 +433,11 @@ namespace Multiplayer.Client
                     Thing thing = SyncSerialization.ReadSync<Thing>(data);
                     if (thing == null) return;
 
+                    // The sender validated against its own state, but an earlier command in the queue (e.g. a fast
+                    // double-click sending the same designation twice) may have changed that by now. Re-check like
+                    // vanilla does before calling DesignateThing.
+                    if (!designator.CanDesignateThing(thing).Accepted) return;
+
                     designator.DesignateThing(thing);
                     designator.Finalize(true);
                 }
