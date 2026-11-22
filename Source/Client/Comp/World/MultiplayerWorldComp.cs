@@ -110,6 +110,7 @@ public class MultiplayerWorldComp : IHasSessionData
             var current = factionData[currentFactionId];
             Scribe_Collections.Look(ref current.givenQuests, "currentGivenQuests", LookMode.Value);
             Scribe_Collections.Look(ref current.dismissedQuests, "currentDismissedQuests", LookMode.Value);
+            Scribe_Collections.Look(ref current.historicalTales, "currentHistoricalTales", LookMode.Value);
         }
         else
         {
@@ -121,6 +122,7 @@ public class MultiplayerWorldComp : IHasSessionData
 
             Scribe_Collections.Look(ref currentGivenQuests, "currentGivenQuests", LookMode.Value);
             Scribe_Collections.Look(ref currentDismissedQuests, "currentDismissedQuests", LookMode.Value);
+            Scribe_Collections.Look(ref currentHistoricalTales, "currentHistoricalTales", LookMode.Value);
         }
 
         if (Scribe.mode == LoadSaveMode.LoadingVars && Multiplayer.session != null && Multiplayer.game != null)
@@ -135,12 +137,15 @@ public class MultiplayerWorldComp : IHasSessionData
             var current = factionData[currentFactionId] = FactionWorldData.FromCurrent(currentFactionId);
             current.givenQuests = currentGivenQuests ?? new HashSet<int>();
             current.dismissedQuests = currentDismissedQuests ?? new HashSet<int>();
+            current.historicalTales = currentHistoricalTales ?? new HashSet<int>();
             currentGivenQuests = null;
             currentDismissedQuests = null;
+            currentHistoricalTales = null;
         }
     }
 
     private HashSet<int> currentGivenQuests;
+    private HashSet<int> currentHistoricalTales;
     private HashSet<int> currentDismissedQuests;
 
     public void WriteSessionData(ByteWriter writer)
