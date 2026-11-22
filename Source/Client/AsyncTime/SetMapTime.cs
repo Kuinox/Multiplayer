@@ -188,6 +188,46 @@ namespace Multiplayer.Client
         }
     }
 
+    // Quests make their GameCondition at generation, on the world clock, and register it later on a map. Vanilla
+    // keeps startTick >= now, so the map condition kept the world's startTick, ahead of the map clock it's ticked and
+    // displayed on: negative "Lasted" and the condition outlasting its duration by the world/map clock gap.
+    // A condition can't start after now on its own map's clock.
+    [HarmonyPatch(typeof(GameConditionManager), nameof(GameConditionManager.RegisterCondition))]
+    static class RegisterMapConditionOnMapClock
+    {
+        static void Postfix(GameConditionManager __instance, GameCondition cond)
+        {
+            if (Multiplayer.Client == null || !Multiplayer.GameComp.asyncTime) return;
+            if (__instance.ownerMap?.AsyncTime() is not { } clock) return;
+
+            if (cond.startTick > clock.mapTicks)
+                cond.startTick = clock.mapTicks;
+        }
+    }
+
+    // TEMP: end map conditions already registered with a world-clock startTick before RegisterMapConditionOnMapClock
+    // existed. Done while ticking the map so every client ends them at the same tick, whenever it loaded the save.
+    // Remove once those saves are cleaned up.
+    [HarmonyPatch(typeof(GameConditionManager), nameof(GameConditionManager.GameConditionManagerTick))]
+    static class EndMapConditionsStartedInTheFuture
+    {
+        static void Prefix(GameConditionManager __instance)
+        {
+            if (Multiplayer.Client == null || !Multiplayer.GameComp.asyncTime) return;
+            if (__instance.ownerMap?.AsyncTime() is not { } clock) return;
+
+            var conditions = __instance.activeConditions;
+            for (int i = conditions.Count - 1; i >= 0; i--)
+            {
+                var cond = conditions[i];
+                if (cond.startTick <= clock.mapTicks) continue;
+
+                Log.Message($"[Multiplayer] Ending {cond.def.defName} on {__instance.ownerMap}: startTick {cond.startTick} is after the map clock {clock.mapTicks}");
+                cond.End();
+            }
+        }
+    }
+
     [HarmonyPatch(typeof(CompCauseGameCondition), nameof(CompCauseGameCondition.EnforceConditionOn))]
     static class MapConditionCauserMapTime
     {
