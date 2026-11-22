@@ -107,6 +107,25 @@ namespace Multiplayer.Client.Comp
         static void Finalizer(AsyncTimeComp __state) => __state?.PostContext();
     }
 
+    // Signals reach a quest on whatever clock sent them, e.g. the transport ship ticking on the world clock sends
+    // "SentSatisfied". Quest parts stamp TicksGame on signals (QuestPartActivable.enableTick, ...) and compare it later
+    // on the quest's own clock: a map quest enabled on the world clock waited for the world/map gap (lent colonists
+    // never came back). Handle the signal on the quest's clock.
+    [HarmonyPatch(typeof(Quest), nameof(Quest.Notify_SignalReceived))]
+    static class SetContextForQuestSignal
+    {
+        static void Prefix(Quest __instance, Signal signal, ref AsyncTimeComp __state)
+        {
+            if (Multiplayer.Client == null || !Multiplayer.GameComp.asyncTime) return;
+            // Same filter as vanilla, don't enter a context for signals the quest ignores
+            if (!signal.global && !signal.tag.StartsWith($"Quest{__instance.id}.")) return;
+
+            __state = MultiplayerAsyncQuest.EnterContext(MultiplayerAsyncQuest.TryGetCachedQuestMap(__instance));
+        }
+
+        static void Finalizer(AsyncTimeComp __state) => __state?.PostContext();
+    }
+
     [HarmonyPatch(typeof(Quest), nameof(Quest.Accept))]
     static class SetContextForAccept
     {
@@ -327,7 +346,28 @@ namespace Multiplayer.Client.Comp
         {
             if (mapQuestsCache.TryGetValue(mapAsyncTimeComp, out var quests))
             {
+                foreach (var quest in quests)
+                    RepairPartsEnabledOnAnotherClock(quest, mapAsyncTimeComp);
+
                 TickQuests(quests);
+            }
+        }
+
+        // TEMP: quest parts enabled by a signal on the world clock before SetContextForQuestSignal existed have an
+        // enableTick ahead of their map clock (lent colonists never returning). Restart them now on the map clock.
+        // Runs while ticking the map so every client repairs at the same tick. Remove once those saves are cleaned up.
+        private static void RepairPartsEnabledOnAnotherClock(Quest quest, AsyncTimeComp clock)
+        {
+            foreach (var part in quest.parts)
+            {
+                if (part is not QuestPartActivable activable || activable.State != QuestPartState.Enabled) continue;
+                if (activable.enableTick <= clock.mapTicks) continue;
+
+                int delta = clock.mapTicks - activable.enableTick;
+                Log.Message($"[Multiplayer] Quest {quest.id} {part.GetType().Name}: enableTick {activable.enableTick} is after the map clock {clock.mapTicks}, moving it to now");
+                activable.enableTick += delta;
+                if (activable is QuestPart_LendColonistsToFaction lend)
+                    lend.returnColonistsOnTick += delta;
             }
         }
 
