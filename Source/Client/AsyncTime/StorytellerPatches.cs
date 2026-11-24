@@ -101,7 +101,7 @@ static class MapContextIncidentParms
         if (AsyncTimeComp.tickingMap != null)
             return;
 
-        if (AsyncWorldTimeComp.tickingWorld && target is Map map)
+        if (AsyncWorldTimeComp.tickingWorld && target is Map map && !map.AsyncTime().InContext)
         {
             AsyncTimeComp.tickingMap = map;
             map.AsyncTime().PreContext();
@@ -124,7 +124,8 @@ static class MapContextIncidentExecute
 {
     static void Prefix(IncidentParms parms, ref Map __state)
     {
-        if (AsyncWorldTimeComp.tickingWorld && parms.target is Map map)
+        // Not when already in the map's context (a quest handling a signal on its map's clock firing an incident)
+        if (AsyncWorldTimeComp.tickingWorld && parms.target is Map map && !map.AsyncTime().InContext)
         {
             AsyncTimeComp.tickingMap = map;
             map.AsyncTime().PreContext();

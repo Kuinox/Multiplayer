@@ -196,10 +196,12 @@ namespace Multiplayer.Client.Comp
         // Entering it again overwrote AsyncTimeComp.prevTime with the map's time: leaving the outer context then
         // "restored" the map's clock as the world's. Finished quests read TicksSinceCleanup every tick of their map,
         // so the world clock became the clock of whichever map ticked last, years behind for a recent colony.
+        // MapContext only knows the ticking/command map: a context entered here (a quest signal on the world clock
+        // whose handling sends another signal to the same quest) has to be checked with InContext.
         // Returns the comp whose context was entered, to leave in a finalizer.
         public static AsyncTimeComp EnterContext(AsyncTimeComp comp)
         {
-            if (comp == null || Multiplayer.MapContext == comp.map) return null;
+            if (comp == null || comp.InContext || Multiplayer.MapContext == comp.map) return null;
             comp.PreContext();
             return comp;
         }

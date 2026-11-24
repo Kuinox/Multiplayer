@@ -176,8 +176,14 @@ namespace Multiplayer.Client
 
         private TimeSnapshot? prevTime;
 
+        // PreContext stores the time to restore in prevTime: entering again before leaving would overwrite it with
+        // this map's time, and leaving the outer context would then put this map's clock on the world.
+        public bool InContext { get; private set; }
+
         public void PreContext()
         {
+            InContext = true;
+
             map.PushFaction(
                 !Multiplayer.GameComp.multifaction || map.ParentFaction is { IsPlayer: true }
                     ? map.ParentFaction
@@ -195,6 +201,7 @@ namespace Multiplayer.Client
 
         public void PostContext()
         {
+            InContext = false;
             prevTime?.Set();
 
             randState = Rand.StateCompressed;

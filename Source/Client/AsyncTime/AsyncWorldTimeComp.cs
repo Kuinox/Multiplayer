@@ -344,13 +344,14 @@ public class AsyncWorldTimeComp : IExposable, ITickable
     public void FinalizeInit()
     {
         Multiplayer.game.SetThingMakerSeed((int)(randState >> 32));
-        RepairWorldClockBehindMaps();
     }
 
     // The world ticks whenever a map does, at the fastest map's speed, and new maps start at most at the latest map
     // clock: it is never behind a map. Saves made with the nested map context bug have the world clock set to a map's
-    // (see MultiplayerAsyncQuest.EnterContext), possibly years behind: world quests and sites showed years left.
-    private void RepairWorldClockBehindMaps()
+    // (see MultiplayerAsyncQuest.EnterContext), possibly years behind: world quests and sites showed years left, and
+    // the World's StoryState kept fire ticks from a map clock ahead of it, so no random quest could fire anymore.
+    // Called from Game.FinalizeInit: World.FinalizeInit runs before the maps (and their clocks) are loaded.
+    public void RepairWorldClockBehindMaps()
     {
         if (!Multiplayer.GameComp.asyncTime) return;
 
@@ -360,5 +361,16 @@ public class AsyncWorldTimeComp : IExposable, ITickable
         Log.Warning($"[Multiplayer] World clock {worldTicks} was behind map clock {latestMap}, moving it forward");
         worldTicks = latestMap;
         Find.TickManager.ticksGameInt = latestMap;
+    }
+}
+
+[HarmonyPatch(typeof(Game), nameof(Game.FinalizeInit))]
+static class RepairWorldClockOnLoad
+{
+    // Prefix: before SetupAsyncTimeLookupForQuests splits active/historical quests on the world clock
+    static void Prefix()
+    {
+        if (Multiplayer.Client == null) return;
+        Multiplayer.game?.asyncWorldTimeComp?.RepairWorldClockBehindMaps();
     }
 }
