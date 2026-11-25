@@ -22,6 +22,8 @@ namespace Multiplayer.Client
             yield return AccessTools.Method(typeof(MapInterface), nameof(MapInterface.HandleLowPriorityInput));
             yield return AccessTools.Method(typeof(MapInterface), nameof(MapInterface.MapInterfaceUpdate));
             yield return AccessTools.Method(typeof(AlertsReadout), nameof(AlertsReadout.AlertsReadoutUpdate));
+            // Hovering an alert recalculates its culprits for the tooltip, clicking it for the camera jump
+            yield return AccessTools.Method(typeof(AlertsReadout), nameof(AlertsReadout.AlertsReadoutOnGUI));
             yield return AccessTools.Method(typeof(SoundRoot), nameof(SoundRoot.Update));
             yield return AccessTools.Method(typeof(FloatMenuMakerMap), nameof(FloatMenuMakerMap.GetOptions));
             yield return AccessTools.Method(typeof(Hediff), nameof(Hediff.GetTooltip));

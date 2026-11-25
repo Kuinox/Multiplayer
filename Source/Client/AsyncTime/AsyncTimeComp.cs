@@ -108,6 +108,9 @@ namespace Multiplayer.Client
             randState = (uint)Gen.HashCombineInt(map.uniqueID, Find.World.ConstantRandSeed);
         }
 
+        // Not saved: the growth moment repair runs on each map's first tick after loading
+        private bool repairedGrowthMoments;
+
         public void Tick()
         {
             tickingMap = map;
@@ -117,6 +120,12 @@ namespace Multiplayer.Client
 
             try
             {
+                if (!repairedGrowthMoments)
+                {
+                    repairedGrowthMoments = true;
+                    Persistent.GrowthMomentSession.RepairLostGrowthMoments(map);
+                }
+
                 map.MapPreTick();
                 mapTicks++;
                 Find.TickManager.ticksGameInt = mapTicks;

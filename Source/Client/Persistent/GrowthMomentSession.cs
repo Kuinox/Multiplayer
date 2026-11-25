@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Multiplayer.API;
+using Multiplayer.Client.Patches;
 using RimWorld;
 using UnityEngine;
 using Verse;
@@ -9,8 +10,9 @@ namespace Multiplayer.Client.Persistent;
 
 public class GrowthMomentSession(Map _) : ExposableSession(null), ITickingSession
 {
+    // MapHeld: a child is often unspawned (carried, in a crib's container, in a pod) when its birthday comes
     public static GrowthMomentSession GetSessionFor(Pawn pawn) =>
-        pawn.Map.MpComp().sessionManager.GetFirstOfType<GrowthMomentSession>(sess => sess.Pawn == pawn);
+        pawn.MapHeld?.MpComp()?.sessionManager.GetFirstOfType<GrowthMomentSession>(sess => sess.Pawn == pawn);
 
     // There isn't a trait selected.
     public const int NullTraitIdx = -1; // intentionally the same as the "not found" return value for IndexOf
@@ -29,10 +31,10 @@ public class GrowthMomentSession(Map _) : ExposableSession(null), ITickingSessio
         letter = letter
     };
 
-    // LetterWithTimeout.LastTickBeforeTimeout adjusted to use the map's time instead of Find.TickManager.TicksGame
-    public override bool IsCurrentlyPausing(Map map) => Map == map && letter.TimeoutActive &&
-                                                        letter.disappearAtTick <= map.AsyncTime().mapTicks + 1 &&
-                                                        !letter.ArchiveView;
+    // LetterWithTimeout.LastTickBeforeTimeout on the clock letter timeouts are kept on (see LetterTimeoutOnWorldClock)
+    private bool TimedOut => letter.TimeoutActive && letter.disappearAtTick <= LetterTimeoutOnWorldClock.Now + 1;
+
+    public override bool IsCurrentlyPausing(Map map) => Map == map && TimedOut && !letter.ArchiveView;
 
     public override bool IsSessionValid => !letter.ArchiveView;
 
@@ -42,7 +44,7 @@ public class GrowthMomentSession(Map _) : ExposableSession(null), ITickingSessio
         return new FloatMenuOption("MpGrowthMomentSession".Translate(Pawn.Name.ToStringShort), OpenWindow);
     }
 
-    public override Map Map => letter.pawn.Map;
+    public override Map Map => letter.pawn.MapHeld;
 
     [SyncMethod]
     public void UpdateChoices(int traitIdx, List<int> passionIndexes)
@@ -62,8 +64,8 @@ public class GrowthMomentSession(Map _) : ExposableSession(null), ITickingSessio
 
     public void Tick()
     {
-        if (!IsSessionValid) Map.MpComp().sessionManager.RemoveSession(this);
-        else if (letter.TimeoutActive && letter.disappearAtTick <= Map.AsyncTime().mapTicks + 1) OpenWindow();
+        if (!IsSessionValid) Map?.MpComp()?.sessionManager.RemoveSession(this);
+        else if (TimedOut) OpenWindow();
     }
 
     public override void ExposeData()
@@ -75,12 +77,34 @@ public class GrowthMomentSession(Map _) : ExposableSession(null), ITickingSessio
         Scribe_Collections.Look(ref passionIndexes, "passionIndexes", LookMode.Value);
     }
 
+    // TEMP: children whose growth moment letter was lost to the null map in TryAddSession have canGainGrowthPoints
+    // stuck at false: no letter, no session, nothing sets it back. Re-enabled once per load on the map's first tick, so
+    // every client repairs at the same tick. Only synced state is checked (letter stacks differ between players).
+    // Remove once those saves are cleaned up.
+    public static void RepairLostGrowthMoments(Map map)
+    {
+        foreach (var pawn in map.mapPawns.AllPawns)
+        {
+            if (!pawn.RaceProps.Humanlike || !pawn.DevelopmentalStage.Child() ||
+                pawn.ageTracker.canGainGrowthPoints || GetSessionFor(pawn) != null)
+                continue;
+
+            Log.Message($"[Multiplayer] {pawn} could not gain growth points and has no pending growth moment, re-enabling it");
+            pawn.ageTracker.canGainGrowthPoints = true;
+        }
+    }
+
     [SyncMethod]
     public static GrowthMomentSession TryAddSession(ChoiceLetter_GrowthMoment letter)
     {
         if (letter.ArchiveView) return null;
         var pawn = letter.pawn;
-        var sessionManager = pawn.Map.MpComp().sessionManager;
+        // Used to read pawn.Map: null for an unspawned child, the NullReferenceException aborted LetterStack.ReceiveLetter
+        // (this runs as its prefix) after the birthday had already set canGainGrowthPoints = false. The letter was
+        // neither shown nor archived and the child never gained growth points again.
+        // Without a map (e.g. in a caravan) there's no session, the vanilla letter handles the choice.
+        var sessionManager = pawn.MapHeld?.MpComp()?.sessionManager;
+        if (sessionManager == null) return null;
         var sess = sessionManager.GetFirstOfType<GrowthMomentSession>(sess => sess.Pawn == pawn);
         if (sess == null)
         {

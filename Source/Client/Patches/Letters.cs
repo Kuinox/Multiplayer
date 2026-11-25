@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using HarmonyLib;
 using RimWorld;
 using UnityEngine;
@@ -9,7 +10,59 @@ using Verse;
 
 namespace Multiplayer.Client.Patches
 {
-    // todo letter timeouts and async time
+    // A letter's timeout is stamped with Find.TickManager.TicksGame wherever the letter is made: often a map tick, on
+    // that map's clock. It's read by the letter stack UI, which runs on the world clock (ahead of every map, by years
+    // for some): TimeoutPassed was already true and LetterStackUpdate removed the letter on the next frame, so letters
+    // with a timeout (growth moments, joiner/trade offers...) vanished before the player could see them.
+    // Keep every timeout on the world clock instead.
+    [HarmonyPatch(typeof(LetterWithTimeout), nameof(LetterWithTimeout.StartTimeout))]
+    public static class LetterTimeoutOnWorldClock
+    {
+        private static bool OnWorldClock =>
+            Multiplayer.Client != null && Multiplayer.GameComp.asyncTime && Multiplayer.AsyncWorldTime != null;
+
+        public static int Now => OnWorldClock ? Multiplayer.AsyncWorldTime.worldTicks : Find.TickManager.TicksGame;
+
+        static void Postfix(LetterWithTimeout __instance)
+        {
+            if (!OnWorldClock) return;
+            __instance.disappearAtTick += Now - Find.TickManager.TicksGame;
+        }
+    }
+
+    // ...and read it on the world clock from any context: the letter stack is drawn inside the map interface (on the
+    // viewed map's clock), a letter is received during a map tick (on that map's clock).
+    [HarmonyPatch]
+    static class LetterTimeoutReadOnWorldClock
+    {
+        static IEnumerable<MethodBase> TargetMethods()
+        {
+            yield return AccessTools.PropertyGetter(typeof(LetterWithTimeout), nameof(LetterWithTimeout.TimeoutPassed));
+            yield return AccessTools.PropertyGetter(typeof(LetterWithTimeout), nameof(LetterWithTimeout.LastTickBeforeTimeout));
+            yield return AccessTools.Method(typeof(LetterWithTimeout), "PostProcessedLabel");
+        }
+
+        static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> insts, MethodBase original)
+        {
+            var ticksGame = AccessTools.PropertyGetter(typeof(TickManager), nameof(TickManager.TicksGame));
+            int replaced = 0;
+            foreach (var inst in insts)
+            {
+                if (inst.Calls(ticksGame))
+                {
+                    inst.opcode = OpCodes.Call;
+                    inst.operand = AccessTools.Method(typeof(LetterTimeoutReadOnWorldClock), nameof(TicksGame));
+                    replaced++;
+                }
+                yield return inst;
+            }
+
+            if (replaced == 0)
+                Log.Error($"Multiplayer: {original} no longer reads TickManager.TicksGame");
+        }
+
+        static int TicksGame(TickManager _) => LetterTimeoutOnWorldClock.Now;
+    }
 
     [HarmonyPatch(typeof(LetterStack), nameof(LetterStack.LetterStackUpdate))]
     static class CloseLettersDuringSimulating
@@ -60,7 +113,7 @@ namespace Multiplayer.Client.Patches
             // The letter is about to be force-shown by LetterStack.LetterStackTick because of expiry
             if (Multiplayer.Ticking
                 && __instance.TimeoutActive
-                && __instance.disappearAtTick == Find.TickManager.TicksGame + 1
+                && __instance.disappearAtTick == LetterTimeoutOnWorldClock.Now + 1
                 && defaultChoices.TryGetValue(__instance.GetType(), out var tuple))
             {
                 if (tuple.method.IsStatic)

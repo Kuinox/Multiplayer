@@ -151,6 +151,7 @@ namespace Multiplayer.Client.Comp
         {
             yield return AccessTools.PropertyGetter(typeof(Quest), nameof(Quest.TicksUntilExpiry));
             yield return AccessTools.PropertyGetter(typeof(QuestPart_Delay), nameof(QuestPart_Delay.TicksLeft));
+            yield return AccessTools.PropertyGetter(typeof(QuestPart_LendColonistsToFaction), nameof(QuestPart_LendColonistsToFaction.ReturnPawnsInDurationTicks));
         }
 
         // Computed directly, swapping the whole time with TimeSnapshot is too slow here (Quest.State goes through it)
@@ -166,6 +167,8 @@ namespace Multiplayer.Client.Comp
                 __result = q.acceptanceExpireTick == -1 ? -1 : Math.Max(q.acceptanceExpireTick - clock.mapTicks, 0);
             else if (__instance is QuestPart_Delay delay)
                 __result = delay.State != QuestPartState.Enabled ? 0 : delay.enableTick + delay.delayTicks - clock.mapTicks;
+            else if (__instance is QuestPart_LendColonistsToFaction lend)
+                __result = Math.Max(lend.returnColonistsOnTick - clock.mapTicks, 0);
             return false;
         }
     }
@@ -348,28 +351,7 @@ namespace Multiplayer.Client.Comp
         {
             if (mapQuestsCache.TryGetValue(mapAsyncTimeComp, out var quests))
             {
-                foreach (var quest in quests)
-                    RepairPartsEnabledOnAnotherClock(quest, mapAsyncTimeComp);
-
                 TickQuests(quests);
-            }
-        }
-
-        // TEMP: quest parts enabled by a signal on the world clock before SetContextForQuestSignal existed have an
-        // enableTick ahead of their map clock (lent colonists never returning). Restart them now on the map clock.
-        // Runs while ticking the map so every client repairs at the same tick. Remove once those saves are cleaned up.
-        private static void RepairPartsEnabledOnAnotherClock(Quest quest, AsyncTimeComp clock)
-        {
-            foreach (var part in quest.parts)
-            {
-                if (part is not QuestPartActivable activable || activable.State != QuestPartState.Enabled) continue;
-                if (activable.enableTick <= clock.mapTicks) continue;
-
-                int delta = clock.mapTicks - activable.enableTick;
-                Log.Message($"[Multiplayer] Quest {quest.id} {part.GetType().Name}: enableTick {activable.enableTick} is after the map clock {clock.mapTicks}, moving it to now");
-                activable.enableTick += delta;
-                if (activable is QuestPart_LendColonistsToFaction lend)
-                    lend.returnColonistsOnTick += delta;
             }
         }
 

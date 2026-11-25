@@ -466,7 +466,10 @@ namespace Multiplayer.Client
                         SyncMethods.tradeJobStartedByMe = -1;
                         trade.OpenWindow();
                     }
-                    else if (trader is Settlement && Find.World.renderer.wantedMode == WorldRenderMode.Planet)
+                    // Trading with a settlement from a caravan runs on every client: from the caravan's Trade gizmo (a
+                    // command) or when a caravan sent to trade arrives (the world tick). It used to open for every
+                    // player looking at the world map, open it only for the one trading.
+                    else if (trader is Settlement && IsTradingPlayer(playerNegotiator))
                     {
                         trade.OpenWindow();
                     }
@@ -476,6 +479,39 @@ namespace Multiplayer.Client
             }
 
             return true;
+        }
+
+        public static bool IsTradingPlayer(Pawn playerNegotiator) => Multiplayer.ExecutingCmds
+            ? TickPatch.currentExecutingCmdIssuedBySelf
+            : playerNegotiator?.Faction == Multiplayer.RealPlayerFaction;
+    }
+
+    // Only move the camera of the player whose caravan arrived to trade
+    [HarmonyPatch(typeof(CaravanArrivalAction_Trade), nameof(CaravanArrivalAction_Trade.Arrived))]
+    static class CaravanArrivalTradeCameraOnlyForOwner
+    {
+        static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> insts, MethodBase original)
+        {
+            var jump = AccessTools.Method(typeof(CameraJumper), nameof(CameraJumper.TryJumpAndSelect));
+            int replaced = 0;
+            foreach (var inst in insts)
+            {
+                if (inst.Calls(jump))
+                {
+                    inst.operand = AccessTools.Method(typeof(CaravanArrivalTradeCameraOnlyForOwner), nameof(TryJumpAndSelect));
+                    replaced++;
+                }
+                yield return inst;
+            }
+
+            if (replaced == 0)
+                Log.Error($"Multiplayer: {original} no longer calls CameraJumper.TryJumpAndSelect");
+        }
+
+        static void TryJumpAndSelect(GlobalTargetInfo target, CameraJumper.MovementMode mode)
+        {
+            if (Multiplayer.Client == null || target.WorldObject?.Faction == Multiplayer.RealPlayerFaction)
+                CameraJumper.TryJumpAndSelect(target, mode);
         }
     }
 
