@@ -74,6 +74,18 @@ static class PollutionByFaction
             polluters.Add(FindPolluter(thing));
     }
 
+    // Both lists are static and not saved: events still pending when a game was left would be handled in the next
+    // game loaded (e.g. a rollback reloading a save), on that client only
+    [HarmonyPatch(typeof(Game), nameof(Game.FinalizeInit))]
+    static class ClearOnLoad
+    {
+        static void Postfix()
+        {
+            PendingEvents.Clear();
+            polluters.Clear();
+        }
+    }
+
     [HarmonyPatch(typeof(CompDissolutionEffect_Goodwill), nameof(CompDissolutionEffect_Goodwill.DoDissolutionEffectMap))]
     static class RecordMapEvent
     {
