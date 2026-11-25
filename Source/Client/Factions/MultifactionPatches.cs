@@ -1002,6 +1002,53 @@ static class CompShuttle_ContainedColonistCount_Patch
 
 }
 
+// A quest shuttle waiting with "all colonists on the map" leaves once the colonists aboard (counted for any player
+// faction above) reach the map's free colonists, which vanilla counts for Faction.OfPlayer only. Transport ships tick
+// on the world tick, where Faction.OfPlayer is the spectator faction: the map count was 0, so a mission shuttle left
+// its site empty right after unloading and stranded the colonists. Count the map's colonists for any player faction.
+[HarmonyPatch(typeof(CompShuttle), nameof(CompShuttle.AllRequiredThingsLoaded), MethodType.Getter)]
+static class CompShuttle_AllRequiredThingsLoaded_Patch
+{
+    static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> insts)
+    {
+        var freeColonistsCount = AccessTools.PropertyGetter(typeof(MapPawns), nameof(MapPawns.FreeColonistsCount));
+        var replacement = AccessTools.Method(typeof(CompShuttle_AllRequiredThingsLoaded_Patch), nameof(FreeColonistsCountAnyPlayerFaction));
+        int replaced = 0;
+
+        foreach (var ci in insts)
+        {
+            if (ci.Calls(freeColonistsCount))
+            {
+                ci.opcode = OpCodes.Call;
+                ci.operand = replacement;
+                replaced++;
+            }
+            yield return ci;
+        }
+
+        if (replaced == 0)
+            Log.Error("Multiplayer: CompShuttle.AllRequiredThingsLoaded no longer reads MapPawns.FreeColonistsCount");
+    }
+
+    // MapPawns.FreeHumanlikesOfFaction for every player faction
+    public static int FreeColonistsCountAnyPlayerFaction(MapPawns mapPawns)
+    {
+        if (Multiplayer.Client == null || !Multiplayer.GameComp.multifaction)
+            return mapPawns.FreeColonistsCount;
+
+        int count = 0;
+        foreach (var pawn in mapPawns.AllPawns)
+        {
+            if (pawn.Faction is { IsPlayer: true } &&
+                (pawn.HostFaction == null || pawn.IsSlave) &&
+                pawn.RaceProps.Humanlike &&
+                !(ModsConfig.AnomalyActive && pawn.IsSubhuman))
+                count++;
+        }
+        return count;
+    }
+}
+
 [HarmonyPatch(typeof(WorldComponent_GravshipController), nameof(WorldComponent_GravshipController.RemoveGravshipFromMap))]
 static class RemoveGravshipFromMap_Patch
 {
