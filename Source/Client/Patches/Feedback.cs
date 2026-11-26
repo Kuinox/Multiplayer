@@ -193,6 +193,12 @@ namespace Multiplayer.Client.Patches
             if (Multiplayer.Client == null || cycle is not CompBiosculpterPod_HealingCycle healingCycle)
                 return true; // Alternatively we could return false and invoke giveJobAct
 
+            // "Carry to biosculpter pod" is a synced float menu option: it runs in a command on every client, the
+            // confirmation popped up for every player (of every faction). Only show it to the one who gave the order,
+            // confirming sends the job through the synced TryTakeOrderedJob.
+            if (Multiplayer.ExecutingCmds && !TickPatch.currentExecutingCmdIssuedBySelf)
+                return false;
+
             var healingDescriptionForPawn = healingCycle.GetHealingDescriptionForPawn(pawn);
             string text = healingDescriptionForPawn.NullOrEmpty()
                 ? "BiosculpterNoCoditionsToHeal".Translate(pawn.Named("PAWN"), healingCycle.Props.label.Named("CYCLE")).Resolve()
