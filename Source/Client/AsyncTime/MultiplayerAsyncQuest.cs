@@ -183,15 +183,10 @@ namespace Multiplayer.Client.Comp
         }
     }
 
-    [HarmonyPatch(typeof(Quest), nameof(Quest.End))]
-    static class RemoveQuestFromCacheOnQuestEnd
-    {
-        static void Postfix(Quest __instance)
-        {
-            if (Multiplayer.Client == null) return;
-            MultiplayerAsyncQuest.TryRemoveCachedQuest(__instance);
-        }
-    }
+    // Ended quests stay cached: vanilla keeps ticking historical quests (cleanup, parts cleared after 30 days) and
+    // they still receive signals. Loading caches every quest, ended or not, so dropping them on End made a running
+    // host's cache differ from a joiner's: ended quests ticked and handled signals on a map clock and RNG for the
+    // joiner only, desyncing paused maps silently until their next command.
 
     public static class MultiplayerAsyncQuest
     {
