@@ -28,6 +28,7 @@ namespace Multiplayer.Client
                 if (session == null)
                 {
                     Close();
+                    return;
                 }
                 else if (session.uiDirty)
                 {
