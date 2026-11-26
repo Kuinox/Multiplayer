@@ -1,3 +1,4 @@
 [submodule "Languages"]
 	path = Languages
-	url = https://github.com/rwmt/Multiplayer-Locale.git
+	url = https://github.com/Kuinox/Multiplayer-Locale.git
+	branch = kuinox

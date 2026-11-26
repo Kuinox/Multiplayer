@@ -36,6 +36,7 @@ namespace Multiplayer.Client
         public static readonly Texture2D Pulse = ContentFinder<Texture2D>.Get("Multiplayer/Pulse");
 
         public static readonly Texture2D ChangeRelationIcon = ContentFinder<Texture2D>.Get("UI/Icons/VisitorsHelp");
+        public static readonly Texture2D PlayerTradeIcon = ContentFinder<Texture2D>.Get("UI/Commands/Trade");
 
         public static readonly Texture2D OptionsGeneral = ContentFinder<Texture2D>.Get("UI/Icons/Options/OptionsGeneral");
         public static readonly Texture2D OptionsGameplay = ContentFinder<Texture2D>.Get("UI/Icons/Options/OptionsGameplay");
