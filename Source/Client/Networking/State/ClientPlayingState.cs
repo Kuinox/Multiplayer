@@ -189,15 +189,31 @@ namespace Multiplayer.Client
                     {
                         playerId = packet.playerId,
                         rawTraces = GZipStream.CompressString(response),
-                        rawJittedMethods = GZipStream.CompressString(JittedMethods.GetJittedMethodsString())
+                        rawJittedMethods = GZipStream.CompressString(JittedMethods.GetJittedMethodsString()),
+                        rawPawnState = GZipStream.CompressString(TryDump(DesyncStateDump.PawnState)),
+                        rawPawnFloats = GZipStream.CompressString(TryDump(PawnFloatState.Dump))
                     });
             }
             else if (packet.mode == ServerTracesPacket.Mode.Transfer)
             {
                 var traces = GZipStream.UncompressString(packet.rawTraces);
                 var jittedMethods = GZipStream.UncompressString(packet.rawJittedMethods);
-                var hostInfo = new SaveableDesyncInfo.HostInfo(traces, jittedMethods);
+                var pawnState = packet.rawPawnState is { Length: > 0 } s ? GZipStream.UncompressString(s) : null;
+                var pawnFloats = packet.rawPawnFloats is { Length: > 0 } f ? GZipStream.UncompressString(f) : null;
+                var hostInfo = new SaveableDesyncInfo.HostInfo(traces, jittedMethods, pawnState, pawnFloats);
                 Find.WindowStack.WindowOfType<DesyncedWindow>()?.HandleHostDesyncInfo(hostInfo);
+            }
+        }
+
+        private static string TryDump(Func<string> dump)
+        {
+            try
+            {
+                return dump();
+            }
+            catch (Exception e)
+            {
+                return $"Failed: {e}";
             }
         }
 

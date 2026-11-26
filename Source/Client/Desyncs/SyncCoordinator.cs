@@ -190,6 +190,17 @@ namespace Multiplayer.Client
         }
 
         /// <summary>
+        /// Adds the hash of the map's pawn floats (see <see cref="Desyncs.PawnFloatState"/>) after a map tick
+        /// </summary>
+        public void TryAddMapFloatState(Map map, int mapTicks)
+        {
+            if (!ShouldCollect) return;
+            var state = OpinionInBuilding.GetMapState(map.uniqueID);
+            state.floatStateHashes.Add(Desyncs.PawnFloatState.Hash(map));
+            state.mapTicks.Add(mapTicks);
+        }
+
+        /// <summary>
         /// Logs an item to aid in desync debugging.
         /// </summary>
         /// <param name="info1">Information to be logged</param>

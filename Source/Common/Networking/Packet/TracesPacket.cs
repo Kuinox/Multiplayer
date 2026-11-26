@@ -6,12 +6,17 @@ public record struct ClientTracesPacket : IPacket
     public int playerId;
     public byte[] rawTraces;
     public byte[] rawJittedMethods;
+    // The host's pawn state and pawn float history, to compare with the desynced client's
+    public byte[] rawPawnState;
+    public byte[] rawPawnFloats;
 
     public void Bind(PacketBuffer buf)
     {
         buf.Bind(ref playerId);
         buf.BindBytes(ref rawTraces);
         buf.BindBytes(ref rawJittedMethods);
+        buf.BindBytes(ref rawPawnState);
+        buf.BindBytes(ref rawPawnFloats);
     }
 }
 
@@ -32,6 +37,8 @@ public record struct ServerTracesPacket : IPacket
     // Used in transfer only
     public byte[] rawTraces;
     public byte[] rawJittedMethods;
+    public byte[] rawPawnState;
+    public byte[] rawPawnFloats;
 
     public static ServerTracesPacket Request(int tick, int diffAt, int playerId) => new()
     {
@@ -41,8 +48,15 @@ public record struct ServerTracesPacket : IPacket
         playerId = playerId
     };
 
-    public static ServerTracesPacket Transfer(byte[] rawTraces, byte[] rawJittedMethods) =>
-        new() { mode = Mode.Transfer, rawTraces = rawTraces, rawJittedMethods = rawJittedMethods };
+    public static ServerTracesPacket Transfer(ClientTracesPacket packet) =>
+        new()
+        {
+            mode = Mode.Transfer,
+            rawTraces = packet.rawTraces,
+            rawJittedMethods = packet.rawJittedMethods,
+            rawPawnState = packet.rawPawnState,
+            rawPawnFloats = packet.rawPawnFloats
+        };
 
     public void Bind(PacketBuffer buf)
     {
@@ -57,6 +71,8 @@ public record struct ServerTracesPacket : IPacket
         {
             buf.BindBytes(ref rawTraces);
             buf.BindBytes(ref rawJittedMethods);
+            buf.BindBytes(ref rawPawnState);
+            buf.BindBytes(ref rawPawnFloats);
         }
     }
 }

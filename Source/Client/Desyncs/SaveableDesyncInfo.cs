@@ -62,6 +62,17 @@ public class SaveableDesyncInfo(
             {
                 zip.AddEntry("local_pawn_state.txt", $"Failed: {e}");
             }
+            zip.AddEntry("host_pawn_state.txt", hostInfo?.PawnState ?? "No host pawn state");
+
+            try
+            {
+                zip.AddEntry("local_pawn_floats.txt", PawnFloatState.Dump());
+            }
+            catch (Exception e)
+            {
+                zip.AddEntry("local_pawn_floats.txt", $"Failed: {e}");
+            }
+            zip.AddEntry("host_pawn_floats.txt", hostInfo?.PawnFloats ?? "No host pawn floats");
 
             try
             {
@@ -206,5 +217,6 @@ public class SaveableDesyncInfo(
         }
     }
 
-    public record HostInfo([CanBeNull] string Traces, [CanBeNull] string JittedMethods);
+    public record HostInfo([CanBeNull] string Traces, [CanBeNull] string JittedMethods,
+        [CanBeNull] string PawnState = null, [CanBeNull] string PawnFloats = null);
 }

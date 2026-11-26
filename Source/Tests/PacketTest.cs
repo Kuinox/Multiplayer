@@ -138,8 +138,8 @@ public class PacketTest
             worldRandomStates = [10, 20, 30],
             mapRandomStates =
             [
-                new MapRandomState { mapId = 1, randomStates = [111, 222] },
-                new MapRandomState { mapId = 2, randomStates = [333, 444, 555] }
+                new MapRandomState { mapId = 1, randomStates = [111, 222], floatStateHashes = [7, 8] },
+                new MapRandomState { mapId = 2, randomStates = [333, 444, 555], floatStateHashes = [9, 10, 11] }
             ],
             traceHashes = [999, 888, 777],
             simulating = true,
@@ -237,9 +237,14 @@ public class PacketTest
 
         // real code is using GZip compressed content for the traces, but we are only testing on the wire representation
         // and are treating the bytes as opaque, so it doesn't matter
-        yield return new ClientTracesPacket { playerId = 123, rawTraces = "trace 1\ntrace 2"u8.ToArray(), rawJittedMethods = "jitted methods"u8.ToArray() };
+        var clientTraces = new ClientTracesPacket
+        {
+            playerId = 123, rawTraces = "trace 1\ntrace 2"u8.ToArray(), rawJittedMethods = "jitted methods"u8.ToArray(),
+            rawPawnState = "pawn state"u8.ToArray(), rawPawnFloats = "pawn floats"u8.ToArray()
+        };
+        yield return clientTraces;
         yield return ServerTracesPacket.Request(9001, 1000, 5);
-        yield return ServerTracesPacket.Transfer("trace 1\ntrace 2"u8.ToArray(), "jitted methods"u8.ToArray());
+        yield return ServerTracesPacket.Transfer(clientTraces);
 
         yield return new ServerNotificationPacket("key");
         yield return new ServerNotificationPacket("key") { args = ["1", "2", "3"] };

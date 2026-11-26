@@ -47,6 +47,21 @@ namespace Multiplayer.Client
                     return $"Wrong random state on map {g.map1.mapId}";
             }
 
+            // After the random states: drift shows up there sooner or later, but a random state mismatch is the
+            // more direct cause when both happen in the same opinion
+            foreach (var g in
+                     from map1 in mapStates
+                     join map2 in other.mapStates on map1.mapId equals map2.mapId
+                     select (map1, map2))
+            {
+                var local = g.map1.mapTicks.Count > 0 ? g.map1 : g.map2;
+                int count = Math.Min(g.map1.floatStateHashes.Count, g.map2.floatStateHashes.Count);
+                for (int i = 0; i < count; i++)
+                    if (g.map1.floatStateHashes[i] != g.map2.floatStateHashes[i])
+                        return $"Pawn floats (needs, hediff severities) drifted on map {g.map1.mapId} at map tick " +
+                               $"{(i < local.mapTicks.Count ? local.mapTicks[i].ToString() : "?")}, see *_pawn_floats.txt";
+            }
+
             if (!worldRandomStates.SequenceEqual(other.worldRandomStates))
                 return "Wrong random state for the world";
 
@@ -59,12 +74,14 @@ namespace Multiplayer.Client
             return null;
         }
 
-        public List<uint> GetRandomStatesForMap(int mapId)
+        public List<uint> GetRandomStatesForMap(int mapId) => GetMapState(mapId).randomStates;
+
+        public MapRandomStateData GetMapState(int mapId)
         {
             var result = mapStates.Find(m => m.mapId == mapId);
-            if (result != null) return result.randomStates;
+            if (result != null) return result;
             mapStates.Add(result = new MapRandomStateData(mapId));
-            return result.randomStates;
+            return result;
         }
 
         public byte[] Serialize()
@@ -80,6 +97,7 @@ namespace Multiplayer.Client
             {
                 writer.WriteInt32(map.mapId);
                 writer.WritePrefixedUInts(map.randomStates);
+                writer.WritePrefixedInts(map.floatStateHashes);
             }
 
             writer.WritePrefixedInts(desyncStackTraceHashes);
@@ -94,7 +112,7 @@ namespace Multiplayer.Client
             commandRandomStates = sync.commandRandomStates,
             worldRandomStates = sync.worldRandomStates,
             mapStates = sync.mapRandomStates.Select(state => new MapRandomStateData(state.mapId)
-                { randomStates = state.randomStates }).ToList(),
+                { randomStates = state.randomStates, floatStateHashes = state.floatStateHashes ?? new() }).ToList(),
             desyncStackTraceHashes = sync.traceHashes,
             simulating = sync.simulating,
             roundMode = sync.roundMode
@@ -106,7 +124,7 @@ namespace Multiplayer.Client
             commandRandomStates = commandRandomStates,
             worldRandomStates = worldRandomStates,
             mapRandomStates = mapStates.Select(state => new MapRandomState
-                { mapId = state.mapId, randomStates = state.randomStates }).ToList(),
+                { mapId = state.mapId, randomStates = state.randomStates, floatStateHashes = state.floatStateHashes }).ToList(),
             traceHashes = desyncStackTraceHashes,
             simulating = simulating,
             roundMode = roundMode
@@ -125,7 +143,8 @@ namespace Multiplayer.Client
             {
                 int mapId = data.ReadInt32();
                 var mapData = new List<uint>(data.ReadPrefixedUInts());
-                maps.Add(new MapRandomStateData(mapId) { randomStates = mapData });
+                var floatHashes = new List<int>(data.ReadPrefixedInts());
+                maps.Add(new MapRandomStateData(mapId) { randomStates = mapData, floatStateHashes = floatHashes });
             }
 
             var traceHashes = new List<int>(data.ReadPrefixedInts());

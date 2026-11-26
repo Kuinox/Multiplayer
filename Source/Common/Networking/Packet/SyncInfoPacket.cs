@@ -71,10 +71,12 @@ public record struct MapRandomState : IPacketBufferable
 {
     public int mapId;
     public List<uint> randomStates;
+    public List<int> floatStateHashes;
 
     public void Bind(PacketBuffer buf)
     {
         buf.Bind(ref mapId);
         buf.Bind(ref randomStates, BinderOf.UInt());
+        buf.Bind(ref floatStateHashes, BinderOf.Int());
     }
 }

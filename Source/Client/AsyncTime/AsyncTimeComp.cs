@@ -159,6 +159,8 @@ namespace Multiplayer.Client
             {
                 PostContext();
                 Multiplayer.game.sync.TryAddMapRandomState(map.uniqueID, randState);
+                Multiplayer.game.sync.TryAddMapFloatState(map, mapTicks);
+                Desyncs.PawnFloatState.Record(map, mapTicks);
                 eventCount++;
                 tickingMap = null;
 
