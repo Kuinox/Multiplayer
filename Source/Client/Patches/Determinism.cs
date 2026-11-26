@@ -487,10 +487,16 @@ namespace Multiplayer.Client.Patches
             return matcher.Instructions();
         }
 
+        // With async time an entry can be stamped on another clock: the world's (ahead of every map) or a map's.
+        // Read on a clock behind its stamp, vanilla's "now - stamp < stale" held for the whole gap between the
+        // clocks (up to millions of ticks): the stat stayed frozen, and only on the clients that were in the game
+        // when it was cached, a joiner recomputed it (mood drifted apart, desync once it crossed a threshold).
         private static bool HasValueInCache(bool hasValueInCache, StatWorker worker, Thing t)
         {
-            var simulating = !Multiplayer.InInterface;
-            return hasValueInCache && !(simulating && worker.temporaryStatCache[t].gameTick < 0);
+            if (!hasValueInCache || Multiplayer.InInterface) return hasValueInCache;
+
+            int stamp = worker.temporaryStatCache[t].gameTick;
+            return stamp >= 0 && stamp <= Find.TickManager.TicksGame;
         }
 
         private static StatCacheEntry NewCacheTicksCtor(StatCacheEntry entry)
