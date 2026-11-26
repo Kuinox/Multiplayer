@@ -1112,29 +1112,33 @@ static class QuestPart_LendColonistsToFaction_Enable_Patch
     }
 }
 
+// Vanilla counts a map as the player's home when its parent is the player's, or it holds a grav engine (any, the
+// lookup has no faction check) or was made by a gravship landing. In multifaction the last two made a map with a grav
+// engine home for every faction: its wealth went into everyone's history graph and storyteller.
+// Spectators see the maps of every player faction as home.
 [HarmonyPatch(typeof(Map), nameof(Map.IsPlayerHome), MethodType.Getter)]
-static class Map_IsPlayerHome_Spectator_Patch
+static class Map_IsPlayerHome_Multifaction_Patch
 {
     static bool Prefix(Map __instance, ref bool __result)
     {
-        if (Multiplayer.Client == null || !Multiplayer.GameComp.multifaction ||
-            Faction.OfPlayer != Multiplayer.WorldComp.spectatorFaction)
+        if (Multiplayer.Client == null || !Multiplayer.GameComp.multifaction)
             return true;
 
+        var me = Faction.OfPlayer;
+        bool spectator = me == Multiplayer.WorldComp.spectatorFaction;
+        bool Mine(Faction f) => spectator ? f is { IsPlayer: true } : f == me;
+
+        var parent = __instance.info?.parent;
+        if (parent != null && parent.def.canBePlayerHome && Mine(parent.Faction))
         {
-            // Is repeat through all player faction a better idea?
-            if (!__instance.wasSpawnedViaGravShipLanding)
-            {
-                MapInfo mapInfo = __instance.info;
-                if (((mapInfo != null) ? mapInfo.parent : null) == null || __instance.info.parent.Faction?.IsPlayer != true || !__instance.info.parent.def.canBePlayerHome)
-                {
-                    __result = GravshipUtility.PlayerHasGravEngine(__instance);
-                    return false;
-                }
-            }
             __result = true;
             return false;
         }
+
+        var engine = GravshipUtility.GetPlayerGravEngine_NewTemp(__instance);
+        __result = engine != null && Mine(engine.Faction) ||
+                   __instance.wasSpawnedViaGravShipLanding && parent != null && Mine(parent.Faction);
+        return false;
     }
 }
 
