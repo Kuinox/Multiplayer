@@ -22,6 +22,7 @@ namespace Multiplayer.Client
                 this.info.titleTranslated = "MpDisconnected".Translate();
 
             closeOnAccept = false;
+            closeOnCancel = false;
             closeOnClickedOutside = false;
             forcePause = true;
             absorbInputAroundWindow = true;
@@ -29,12 +30,6 @@ namespace Multiplayer.Client
 
         const float ButtonHeight = 40f;
         const float ButtonSpacing = 10f;
-
-        public override void OnCancelKeyPressed()
-        {
-            Event.current.Use();
-            Dismiss();
-        }
 
         public override void DoWindowContents(Rect inRect)
         {
@@ -68,7 +63,12 @@ namespace Multiplayer.Client
             var buttonText = isPlaying ? "QuitToMainMenu" : "CloseButton";
 
             if (Widgets.ButtonText(buttonRect, buttonText.Translate()))
-                Dismiss();
+            {
+                if (isPlaying)
+                    GenScene.GoToMainMenu();
+                else
+                    Close();
+            }
 
             if (info.specialButtonTranslated == null)
                 return;
@@ -84,14 +84,6 @@ namespace Multiplayer.Client
                 info.specialButtonAction();
                 Close();
             }
-        }
-
-        private void Dismiss()
-        {
-            if (Current.ProgramState == ProgramState.Entry)
-                Close();
-            else
-                GenScene.GoToMainMenu();
         }
 
         public override void PostClose()

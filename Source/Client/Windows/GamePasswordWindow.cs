@@ -1,5 +1,4 @@
 ﻿using Multiplayer.Common.Networking.Packet;
-using UnityEngine;
 using Verse;
 
 namespace Multiplayer.Client;
@@ -14,6 +13,7 @@ public class GamePasswordWindow : AbstractTextInputWindow
         this.username = username;
         title = "MpGamePassword".Translate();
         doCloseX = false;
+        closeOnCancel = false;
         closeOnClickedOutside = false;
         acceptBtnLabel = "MpConnectButton".Translate();
         closeBtnLabel = "CancelButton".Translate();
@@ -25,12 +25,6 @@ public class GamePasswordWindow : AbstractTextInputWindow
         Multiplayer.Client.Send(new ClientUsernamePacket(username, curText));
         Close(false);
         return true;
-    }
-
-    public override void OnCancelKeyPressed()
-    {
-        Event.current.Use();
-        OnCloseButton();
     }
 
     public override void OnCloseButton()

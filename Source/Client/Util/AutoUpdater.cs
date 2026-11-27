@@ -100,7 +100,7 @@ public static class AutoUpdater
                     GenCommandLine.Restart,
                     "Later",
                     null,
-                    "Multiplayer updated") { closeOnCancel = true }));
+                    "Multiplayer updated")));
             }
             catch (NotEligibleException e)
             {
@@ -122,7 +122,7 @@ public static class AutoUpdater
             "Restart now",
             GenCommandLine.Restart,
             "Later",
-            null) { closeOnCancel = true });
+            null));
     }
 
     /// Download the given build, restart the game and rejoin the server. Shows progress and errors in the UI.

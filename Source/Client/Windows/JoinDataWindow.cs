@@ -63,12 +63,7 @@ namespace Multiplayer.Client
             this.connector = connector;
 
             closeOnAccept = false;
-        }
-
-        public override void OnCancelKeyPressed()
-        {
-            Event.current.Use();
-            CancelJoin();
+            closeOnCancel = false;
         }
 
         public override void PostOpen()
@@ -340,13 +335,10 @@ namespace Multiplayer.Client
                 Find.WindowStack.Add(new FixAndRestartWindow(remote, connector));
 
             if (Widgets.ButtonText(btnCenter.Right(150f), "MpMismatchQuit".Translate()))
-                CancelJoin();
-        }
-
-        private void CancelJoin()
-        {
-            Multiplayer.StopMultiplayerAndClearAllWindows();
-            Find.WindowStack.Add(new ServerBrowser());
+            {
+                Multiplayer.StopMultiplayerAndClearAllWindows();
+                Find.WindowStack.Add(new ServerBrowser());
+            }
         }
 
         private bool HasCoreMismatches() => filesRoot.children.Any(c => c.id.Contains("ludeon"));
@@ -859,6 +851,7 @@ namespace Multiplayer.Client
             applyConfigs = data.hasConfigs;
 
             closeOnAccept = false;
+            closeOnCancel = false;
             absorbInputAroundWindow = true;
         }
 

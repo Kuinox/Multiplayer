@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using HarmonyLib;
 using RimWorld;
 using UnityEngine;
@@ -79,6 +80,43 @@ namespace Multiplayer.Client.Patches
                 if (letter is ChoiceLetter choice && choice.Choices.Any(c => c.action?.Method == choice.Option_Close.action.Method) && Time.time - letter.arrivalTime > 4)
                     __instance.RemoveLetter(letter);
             }
+        }
+    }
+
+    [HarmonyPatch]
+    static class DismissEventLettersOnCancel
+    {
+        private static readonly ConditionalWeakTable<Dialog_NodeTreeWithFactionInfo, DiaOption> closeOptions = new();
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(Dialog_NodeTreeWithFactionInfo), MethodType.Constructor,
+            [typeof(DiaNode), typeof(Faction), typeof(bool), typeof(bool), typeof(string)])]
+        static void EnableCloseOnCancel(Dialog_NodeTreeWithFactionInfo __instance, DiaNode nodeRoot)
+        {
+            var closeOption = nodeRoot.options.Find(option =>
+                option.resolveTree && !option.disabled &&
+                option.action?.Target is ChoiceLetter letter && option.action == letter.Option_Close.action);
+            if (closeOption == null) return;
+
+            closeOptions.Add(__instance, closeOption);
+            __instance.closeOnCancel = true;
+        }
+
+        [HarmonyPrefix]
+        [HarmonyPatch(typeof(Window), nameof(Window.OnCancelKeyPressed))]
+        static bool CloseLetter(Window __instance)
+        {
+            if (__instance is not Dialog_NodeTreeWithFactionInfo dialog || !dialog.closeOnCancel ||
+                !closeOptions.TryGetValue(dialog, out var closeOption))
+                return true;
+
+            Event.current.Use();
+            if (!closeOption.disabled && dialog.curNode.options.Contains(closeOption))
+            {
+                closeOption.dialog = dialog;
+                closeOption.Activate();
+            }
+            return false;
         }
     }
 
