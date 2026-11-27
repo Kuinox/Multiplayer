@@ -131,11 +131,22 @@ public class PlayerTradeSession : ExposableSession, ISessionWithTransferables, I
 
     public static FloatMenuAcceptanceReport CanTradeFromCaravan(Caravan caravan, Settlement settlement)
     {
-        if (Multiplayer.Client == null || !Multiplayer.GameComp.multifaction || caravan == null || settlement == null)
+        var report = CanTradeAtSettlement(caravan?.Faction, settlement);
+        if (!report)
+            return report;
+
+        if (BestCaravanPawnUtility.FindBestNegotiator(caravan, settlement.Faction) == null)
+            return FloatMenuAcceptanceReport.WithFailReason("MpPlayerTradeNoNegotiator".Translate());
+
+        return true;
+    }
+
+    internal static FloatMenuAcceptanceReport CanTradeAtSettlement(Faction visitor, Settlement settlement)
+    {
+        if (Multiplayer.Client == null || Multiplayer.GameComp?.multifaction != true || settlement == null)
             return false;
 
         var host = settlement.Faction;
-        var visitor = caravan.Faction;
         var spectator = Multiplayer.WorldComp.spectatorFaction;
         if (host is not { IsPlayer: true } || visitor is not { IsPlayer: true } || host == visitor ||
             host == spectator || visitor == spectator)
@@ -143,9 +154,6 @@ public class PlayerTradeSession : ExposableSession, ISessionWithTransferables, I
 
         if (!settlement.Spawned || !settlement.HasMap)
             return FloatMenuAcceptanceReport.WithFailReason("MpPlayerTradeNoMap".Translate());
-
-        if (BestCaravanPawnUtility.FindBestNegotiator(caravan, host) == null)
-            return FloatMenuAcceptanceReport.WithFailReason("MpPlayerTradeNoNegotiator".Translate());
 
         return true;
     }
