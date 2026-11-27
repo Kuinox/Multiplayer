@@ -30,24 +30,73 @@ public class SaveableDesyncInfo(
     private readonly Task<string> metadata = Task.Run(MetadataGenerator.Generate);
     private readonly Task<FileInfo> replay = Task.Run(SaveReplayIfApplicable);
 
+    // The last desync of this session: the host's info is routed here whenever it arrives
+    [CanBeNull] public static SaveableDesyncInfo Current { get; private set; }
+
+    [CanBeNull] public HostInfo Host { get; private set; }
+    public bool Saved { get; private set; }
+    [CanBeNull] private string savedPath;
+
     public bool ReadyToSave => metadata.IsCompleted && replay.IsCompleted;
 
-    public void Save([CanBeNull] HostInfo hostInfo)
+    public SaveableDesyncInfo Register()
     {
+        Current = this;
+        return this;
+    }
+
+    public void HandleHostInfo(HostInfo hostInfo)
+    {
+        Host = hostInfo;
+        if (Saved) AddHostInfoToSavedZip();
+    }
+
+    // The zip was written without the host's info (it came after the wait in DesyncedWindow): add it now
+    private void AddHostInfoToSavedZip()
+    {
+        if (savedPath == null || Host == null) return;
+
+        try
+        {
+            using var zip = MpZipFile.Open(savedPath, ZipArchiveMode.Update);
+            foreach (var entry in zip.Entries.Where(e => e.FullName.StartsWith("host_")).ToList())
+                entry.Delete();
+            AddHostEntries(zip, Host);
+            Log.Message($"Multiplayer: added the host's desync info to {Path.GetFileName(savedPath)}");
+        }
+        catch (Exception e)
+        {
+            Log.Error($"Exception adding host desync info to {savedPath}: {e}");
+        }
+    }
+
+    private static void AddHostEntries(ZipArchive zip, [CanBeNull] HostInfo hostInfo)
+    {
+        zip.AddEntry("host_traces.txt", hostInfo?.Traces ?? "No host traces");
+        zip.AddEntry("host_jitted_methods.txt", hostInfo?.JittedMethods ?? "No host jitted methods");
+        zip.AddEntry("host_pawn_state.txt", hostInfo?.PawnState ?? "No host pawn state");
+        zip.AddEntry("host_pawn_floats.txt", hostInfo?.PawnFloats ?? "No host pawn floats");
+    }
+
+    // Needs the game loaded (pawn dumps, session): call it before leaving the game
+    public void Save()
+    {
+        if (Saved) return;
+        Saved = true;
+
         var watch = Stopwatch.StartNew();
 
         try
         {
             var desyncFilePath = FindFileNameForNextDesyncFile();
-            using var zip = MpZipFile.Open(Path.Combine(Multiplayer.DesyncsDir, desyncFilePath + ".zip"), ZipArchiveMode.Create);
+            savedPath = Path.Combine(Multiplayer.DesyncsDir, desyncFilePath + ".zip");
+            using var zip = MpZipFile.Open(savedPath, ZipArchiveMode.Create);
 
             zip.AddEntry("desync_info", GetDesyncDetails());
 
             zip.AddEntry("local_traces.txt", GetLocalTraces());
-            zip.AddEntry("host_traces.txt", hostInfo?.Traces ?? "No host traces");
-
             zip.AddEntry("local_jitted_methods.txt", JittedMethods.GetJittedMethodsString());
-            zip.AddEntry("host_jitted_methods.txt", hostInfo?.JittedMethods ?? "No host jitted methods");
+            AddHostEntries(zip, Host);
 
             var extraLogs = LogGenerator.PrepareLogData();
             if (extraLogs != null) zip.AddEntry("local_logs.txt", extraLogs);
@@ -62,7 +111,6 @@ public class SaveableDesyncInfo(
             {
                 zip.AddEntry("local_pawn_state.txt", $"Failed: {e}");
             }
-            zip.AddEntry("host_pawn_state.txt", hostInfo?.PawnState ?? "No host pawn state");
 
             try
             {
@@ -72,7 +120,6 @@ public class SaveableDesyncInfo(
             {
                 zip.AddEntry("local_pawn_floats.txt", $"Failed: {e}");
             }
-            zip.AddEntry("host_pawn_floats.txt", hostInfo?.PawnFloats ?? "No host pawn floats");
 
             try
             {

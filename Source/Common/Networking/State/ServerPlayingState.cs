@@ -27,7 +27,8 @@ namespace Multiplayer.Common
         public void HandleTraces(ClientTracesPacket packet)
         {
             if (!Player.IsHost) return;
-            Server.GetPlayer(packet.playerId)?.SendPacket(ServerTracesPacket.Transfer(packet));
+            // Fragmented: with the pawn dumps the packet is over MaxSinglePacketSize, and Send would throw
+            Server.GetPlayer(packet.playerId)?.conn.SendFragmented(ServerTracesPacket.Transfer(packet).Serialize());
         }
 
         [TypedPacketHandler]

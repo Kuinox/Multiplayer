@@ -185,14 +185,15 @@ namespace Multiplayer.Client
                 var info = Multiplayer.game.sync.knownClientOpinions.FirstOrDefault(b => b.startTick == packet.tick);
                 var response = info?.GetFormattedStackTracesForRange(packet.diffAt) ?? "Traces not available";
 
-                connection.Send(new ClientTracesPacket
+                // Fragmented: with the pawn dumps the packet is over MaxSinglePacketSize, and Send would throw
+                connection.SendFragmented(new ClientTracesPacket
                     {
                         playerId = packet.playerId,
                         rawTraces = GZipStream.CompressString(response),
                         rawJittedMethods = GZipStream.CompressString(JittedMethods.GetJittedMethodsString()),
                         rawPawnState = GZipStream.CompressString(TryDump(DesyncStateDump.PawnState)),
                         rawPawnFloats = GZipStream.CompressString(TryDump(PawnFloatState.Dump))
-                    });
+                    }.Serialize());
             }
             else if (packet.mode == ServerTracesPacket.Mode.Transfer)
             {
@@ -201,7 +202,8 @@ namespace Multiplayer.Client
                 var pawnState = packet.rawPawnState is { Length: > 0 } s ? GZipStream.UncompressString(s) : null;
                 var pawnFloats = packet.rawPawnFloats is { Length: > 0 } f ? GZipStream.UncompressString(f) : null;
                 var hostInfo = new SaveableDesyncInfo.HostInfo(traces, jittedMethods, pawnState, pawnFloats);
-                Find.WindowStack.WindowOfType<DesyncedWindow>()?.HandleHostDesyncInfo(hostInfo);
+                // Also after the desync zip was written without it: it's added to the zip
+                SaveableDesyncInfo.Current?.HandleHostInfo(hostInfo);
             }
         }
 

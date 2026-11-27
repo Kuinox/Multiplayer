@@ -17,9 +17,7 @@ namespace Multiplayer.Client
         private string text;
         private readonly SaveableDesyncInfo desyncInfo;
         private float openedAt;
-        private bool infoWritten;
         private bool rejoining;
-        [CanBeNull] private SaveableDesyncInfo.HostInfo hostInfo;
 
         public DesyncedWindow(string text, SaveableDesyncInfo desyncInfo)
         {
@@ -81,33 +79,29 @@ namespace Multiplayer.Client
             var openDesyncsFolder = MpUI.ButtonTextWithTip(
                 new Rect(x, 0, 120, 35),
                 "MpOpenDesyncFolder".Translate(),
-                infoWritten ? null : "MpDesyncedWaiting".Translate() + MpUI.FixedEllipsis(), !infoWritten, 9793021
+                desyncInfo.Saved ? null : "MpDesyncedWaiting".Translate() + MpUI.FixedEllipsis(), !desyncInfo.Saved, 9793021
             );
             if (openDesyncsFolder)
                 ShellOpenDirectory.Execute(Multiplayer.DesyncsDir);
             x += 120 + 10;
 
             if (Widgets.ButtonText(new Rect(x, 0, 120, 35), "Quit".Translate()))
+            {
+                desyncInfo.Save();
                 MainMenuPatch.AskQuitToMainMenu();
+            }
 
             GUI.EndGroup();
-        }
-
-        public void HandleHostDesyncInfo(SaveableDesyncInfo.HostInfo hostInfo)
-        {
-            this.hostInfo = hostInfo;
         }
 
         public override void WindowUpdate()
         {
             const float maxWait = 5f;
 
-            var shouldWrite = hostInfo != null || Time.realtimeSinceStartup - openedAt > maxWait;
-            if (!infoWritten && shouldWrite && desyncInfo.ReadyToSave)
-            {
-                desyncInfo.Save(hostInfo);
-                infoWritten = true;
-            }
+            // Without the host's info after maxWait: it's added to the zip if it comes later
+            var shouldWrite = desyncInfo.Host != null || Time.realtimeSinceStartup - openedAt > maxWait;
+            if (!desyncInfo.Saved && shouldWrite && desyncInfo.ReadyToSave)
+                desyncInfo.Save();
         }
     }
 

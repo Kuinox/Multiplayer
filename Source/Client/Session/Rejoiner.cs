@@ -1,4 +1,5 @@
 ﻿using System;
+using Multiplayer.Client.Desyncs;
 using Multiplayer.Client.Util;
 using Multiplayer.Common;
 using Verse;
@@ -26,6 +27,10 @@ public static class Rejoiner
 
     public static void DoRejoin()
     {
+        // The rejoin unloads the game, which an unwritten desync report needs
+        if (Current.Game != null && SaveableDesyncInfo.Current is { Saved: false } desyncInfo)
+            desyncInfo.Save();
+
         Multiplayer.Client.Send(Packets.Client_RequestRejoin);
 
         Multiplayer.Client.ChangeState(ConnectionStateEnum.ClientLoading);
