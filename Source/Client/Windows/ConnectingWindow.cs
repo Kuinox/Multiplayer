@@ -23,7 +23,6 @@ namespace Multiplayer.Client
         public BaseConnectingWindow()
         {
             closeOnAccept = false;
-            closeOnCancel = false;
         }
 
         // ExtraOnGUI is called before drawing the window shadow and WindowOnGUI
