@@ -18,6 +18,7 @@ namespace Multiplayer.Client.Comp
         public TimeControl timeControl;
         public Dictionary<int, PlayerData> playerData = new(); // player id to player data
         public int nextSessionId;
+        public List<int> mechsNoQualityBuild = new(); // thingIDNumbers of mechs not allowed to finish quality buildings
 
         public string idBlockBase64;
 
@@ -34,6 +35,8 @@ namespace Multiplayer.Client.Comp
             Scribe_Values.Look(ref pauseOnLetter, "pauseOnLetter");
             Scribe_Values.Look(ref timeControl, "timeControl");
             Scribe_Values.Look(ref nextSessionId, "nextSessionId");
+            Scribe_Collections.Look(ref mechsNoQualityBuild, "mechsNoQualityBuild", LookMode.Value);
+            mechsNoQualityBuild ??= new();
 
             // Store for back-compat conversion in GameExposeComponentsPatch
             if (Scribe.mode == LoadSaveMode.LoadingVars)
