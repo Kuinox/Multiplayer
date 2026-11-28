@@ -36,6 +36,24 @@ namespace Multiplayer.Client.Persistent
         }
     }
 
+    // Ritual gizmos of the same pattern from different ideos merge into one button (e.g. "Begin role change"
+    // for the primary and every minor ideo). Clicking it runs ProcessInput on every gizmo in the group, the
+    // clicked (primary ideo) one last. In vanilla each opens a Dialog_BeginRitual replacing the previous one,
+    // so the primary ideo's dialog wins. In MP each is a synced ShowRitualBeginWindow: the first (a minor
+    // ideo's) creates the ritual session and the rest, the primary ideo's included, are rejected as
+    // "another ritual in progress". Only process the clicked gizmo, which gives vanilla's end result.
+    [HarmonyPatch(typeof(Gizmo), nameof(Gizmo.InheritInteractionsFrom))]
+    static class MergedRitualGizmosOnlyClickOne
+    {
+        static bool Prefix(Gizmo __instance, ref bool __result)
+        {
+            if (Multiplayer.Client == null || __instance is not Command_Ritual) return true;
+
+            __result = false;
+            return false;
+        }
+    }
+
     [HarmonyPatch(typeof(Dialog_BeginRitual), nameof(Dialog_BeginRitual.Start))]
     static class HandleStartRitual
     {
